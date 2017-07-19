@@ -1,0 +1,161 @@
+---
+title: "Genome Sequencing of Ascochyta rabiei Strains"
+author: "Ido Bar"
+date: "18 July 2017"
+output: 
+    html_document:
+      toc: true
+      toc_depth: 3
+      highlight: pygments
+      number_sections: false
+      code_folding: hide
+bibliography: data/Fungal_genomes.bib
+csl: data/springer-basic-improved-author-date-with-italic-et-al-period.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
+cran_packages <- c("tidyverse", "knitr", "pander", "captioner", "RefManageR")
+install.deps(cran_packages)
+# Connect to Zotero to access references
+biblio <- ReadBib("data/Fungal_genomes.bib")
+```
+
+
+
+```{r captions, include=FALSE, eval=TRUE}
+figs <- captioner(prefix="Figure")
+tbls <- captioner(prefix="Table")
+tbls(name="samples","Ascochyta rabiei isolates used for DNA sequencing.")
+samples_table <- readxl::read_excel("data/P_rabiei_isolate_list_sent_for_sequencing.xlsx")
+
+#figs(name="WtFreq1","Weight frequency of Ruffe captured in 1992.")
+```
+
+# Experimental Design
+DNA was extracted from 9 strains of _Ascochyta rabiei_ (`r tbls(name="samples",display="cite")`) and sent for sequencing on an Illumina HiSeq2500, producing 100 bp short paired-end reads (Macrogen, Korea; detailed sequencing report can be found at `Macrogen_report_1702KHP-0164.pdf` file).
+
+```{r eval=TRUE} 
+pander(as.data.frame(samples_table), caption=tbls("samples"), justify="left")
+```
+
+DNA-Seq data processing and Genome assembly was performed following the methods specified by @haas_approaches_2011, @hittalmani_novo_2016 and @verma_draft_2016, with modification to run on the _Griffith Gowonda HPC Cluster_ (using PBSPro scheduler).  
+
+
+# Genome Assembly Pipeline
+## General overview:
+1. Data pre-processing:
+    a. Quality check
+    b. Adaptor trimming
+    c. Post-trim quality check
+2. Genome assembly
+3. Identification of gene models 
+4. Annotation of non-coding elements
+5. Produce assembly statistics and assessment [@cisse_fgmp:_2016]
+
+## Useful resources:
+* Draft genome sequencing and secretome analysis of fungal phytopathogen _Ascochyta rabiei_ provides insight into the
+necrotrophic effector repertoire. [Scientific Reports, DOI:10.1038/srep24638](https://www.nature.com/articles/srep24638)  
+
+
+## Methods
+
+### Data pre-processing
+
+
+#### Adaptor Trimming
+Adaptors needed to be removed, as well as very low quality bases/reads, so trimming was performed with BBduk (from BBMap v37.36). See official download page on [SourceForge](https://sourceforge.net/projects/bbmap/), [user guide](http://jgi.doe.gov/data-and-tools/bbtools/bb-tools-user-guide/bbduk-guide/) and [SEQanswers thread](http://seqanswers.com/forums/showthread.php?t=42776).  
+*Performed on 18/07/2017*
+```{bash bbduk_trim}
+# Prepare the BBduk commands
+DATE=`date +%d_%m_%Y`
+RUN=bbduk_grid_commands_${DATE} # day of run was 19_07_2017
+mkdir Adapter_trim_${DATE}
+cd !$
+find ../ -maxdepth 1 -name "*.fastq.gz" | sort | gawk -F"\t" -v bbmap_dir=$BBMAP_DIR -v d=$DATE 'BEGIN{command=sprintf("bbduk.sh -Xmx1g ref=%s/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 hdist2=0 tpe tbo qtrim=w trimq=10 ziplevel=9 overwrite=true", bbmap_dir)};NR%2==1{n=split($1,a,"/"); infile=gensub("_1\\.", "_#.", "1", $1); basename=gensub(/(.+)_1.fastq.gz/, "\\1", "1", a[n]);printf("%s in=%s out=bbduk_clean_%s_R#.fastq.gz stats=%s.stats\n",command,infile,basename, basename)}' > ${RUN}.bash
+
+CMDS_FILE=`ls -1 bbduk_grid_commands_*.bash`
+
+# Prepare PBS script
+echo '#!/bin/bash -v
+#PBS -V
+#PBS -q qweek_s
+#PBS -l select=1:ncpus=12:mem=4GB,walltime=10:00:00
+#PBS -m be
+#PBS -M i.bar@griffith.edu.au
+#PBS -N A_rab_bbduk
+
+cd $PBS_O_WORKDIR
+CMDS_FILE=`ls -1 bbduk_grid_commands_*.bash`
+gawk -v ARRAY_IND=$PBS_ARRAY_INDEX 'NR==ARRAY_IND' ${CMDS_FILE} | bash' > ${RUN}.pbs
+
+# Run BBduk
+JOBS_NUM=`wc -l ${CMDS_FILE} | gawk '{print $1}'`
+qsub -J1-$JOBS_NUM ${RUN}.pbs
+# record the array ID: 4722087
+
+# Check results (23/01/2017)
+find . -name "A_rab_bbduk.e4722087.*" -exec cat {} > ${RUN}.log \;
+grep "Result:" ${RUN}.log | gawk 'BEGIN{per=0};match($7, /[0-9]+\.[0-9]+/){per+=substr($7, RSTART, RLENGTH); avg=per/NR}END{printf("Average percentage of bases kept after trimming: %.2f%% \nNumber of files processed: %d\n",avg, NR)}'
+grep "Input:" ${RUN}.log | gawk 'BEGIN{reads=0};{reads+=$2; avg=reads/NR}END{printf("Average number of reads per file: %.2f \nTotal number of reads: %d\nNumber of files processed: %d\n",avg, reads,NR)}'
+```
+Output:  
+```{bash mirnaseq_trim_results}
+> "Average percentage of bases kept after trimming: 98.81%, Number of files processed: 9"  
+> "Average number of reads per file: 36174722.22, Total number of reads: 325572500"  
+```
+
+**BBduk** seem to produce cleaner files (with less Illumina adapter and PCR primers contaminations) than other trimming methods, so it was chosen for downstream analysis.
+
+Verify adaptor trimming quality with [DNApi v1.1](https://github.com/jnktsj/DNApi) [@tsuji_dnapi:_2016] and FastQC (v0.11.5)
+```{bash trim_qc}
+# Run FastQC on the output files
+mkdir Fastqc_trimmed 
+echo 'cd $PBS_O_WORKDIR; fastqc -t 12 -o Fastqc_trimmed bbduk_clean_*.fastq.gz' | qsub -V -q qweek_s -l select=1:ncpus=12:mem=4GB,walltime=10:00:00 -m be -M i.bar@griffith.edu.au -N fastq_trim
+# Prepare DNApi commands
+GENOME="$HOME/data/A_rabiei_sequencing/A.rabiei_me14"
+bowtie2-build ${GENOME}.fasta $GENOME
+DATE=`date +%d_%m_%Y`
+ls -1 bbduk_clean_*.fastq.gz | gawk -v BTIDX=$GENOME -v date=$DATE 'BEGIN{logfile="DNApi_bbduk_"date".log"; "touch "logfile | getline};{printf "echo \"%s\" >> %s; pigz -cd %s | dnapi.py --no-output-files --map-command \"bowtie2 --very-sensitive -f -p 12 -x %s -U @in > @out \" - >> %s  \n", $1, logfile, $1, BTIDX, logfile}' > DNApi_bbduk_files_$DATE.bash
+
+CMDS_FILE=`ls -1 DNApi_bbduk_files_*.bash`
+# Prepare PBS script
+echo '#!/bin/bash -v
+#PBS -V
+#PBS -q qweek_s
+#PBS -l select=1:ncpus=12:mem=4GB,walltime=10:00:00
+#PBS -m be
+#PBS -M i.bar@griffith.edu.au
+#PBS -N DNApi
+
+module load bioinformatics/samtools/0.1.18
+module load glibc/2.14.1
+cd $PBS_O_WORKDIR
+CMDS_FILE=`ls -1 DNApi_bbduk_files_*.bash`
+gawk -v ARRAY_IND=$PBS_ARRAY_INDEX "NR==ARRAY_IND" $CMDS_FILE | bash' > DNApi_bbduk_files_$DATE.pbs
+
+# submit the jobs to the scheduler
+PBS_FILE=`ls -1 DNApi_bbduk_files_*.pbs`
+JOBS_NUM=`wc -l ${CMDS_FILE} | gawk '{print $1}'`
+qsub -J1-${JOBS_NUM} $PBS_FILE
+# Job ID 4722091[]
+```
+
+Get pre and post-trimming statistics using MultiQC v1.0 [@ewels_multiqc:_2016]
+```{bash multi_qc}
+# Install multiQC (make sure conda python environment is activated)
+conda install -c bioconda multiqc
+cd ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/
+multiqc .
+```
+
+### General information
+This document was last updated at `r Sys.time()` using R Markdown (built with `r R.version.string`). Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. It is especially powerful at authoring documents and reports which include code and can execute code and use the results in the output. For more details on using R Markdown see <http://rmarkdown.rstudio.com> and [Rmarkdown cheatsheet](https://www.rstudio.com/wp-content/uploads/2016/03/rmarkdown-cheatsheet-2.0.pdf).
+
+***
+### Bibliography
+
+<!-- ```{r results='asis', eval=TRUE} -->
+<!-- PrintBibliography(biblio) -->
+<!-- ``` -->
+
