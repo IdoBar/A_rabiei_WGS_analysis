@@ -1,2 +1,2 @@
-# A_rabiei_WGS
-Whole-Genome-Sequencing analysis pipeline of Ascochyta rabiei isolates
+# A. rabiei WGS Analysis
+Whole-Genome-Sequencing analysis pipeline of *Ascochyta rabiei* isolates
