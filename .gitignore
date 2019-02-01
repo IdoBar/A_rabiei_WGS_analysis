@@ -3,3 +3,6 @@ A_rabiei_WGS.Rproj
 .Rhistory
 .RData
 .Ruserdata
+output/
+plots/
+raw_data/
