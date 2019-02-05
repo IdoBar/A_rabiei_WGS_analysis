@@ -32,14 +32,6 @@ on 4 lanes of a NextSeq flowcell, producing 150 bp paried-end reads (run
 name CAGRF19461).  
 Details of the sequenced isolates is provided in (Table 1).
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-    pander(as.data.frame(samples_table), caption=tbls("samples"), justify="left") 
-
->>>>>>> 124a9e9ff27cc5d1740cd6f98bd35be380f259be
->>>>>>> d9f24d34dc90513bf4995fbd909cb8d0c5dd542d
 <table>
 <caption>Table 1: Ascochyta rabiei isolates used for DNA sequencing. (continued below)</caption>
 <colgroup>
