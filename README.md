@@ -32,6 +32,11 @@ on 4 lanes of a NextSeq flowcell, producing 150 bp paried-end reads (run
 name CAGRF19461).  
 Details of the sequenced isolates is provided in (Table 1).
 
+<<<<<<< HEAD
+=======
+    pander(as.data.frame(samples_table), caption=tbls("samples"), justify="left") 
+
+>>>>>>> 124a9e9ff27cc5d1740cd6f98bd35be380f259be
 <table>
 <caption>Table 1: Ascochyta rabiei isolates used for DNA sequencing. (continued below)</caption>
 <colgroup>
@@ -568,7 +573,11 @@ Appendices
 
 ### Appendix 2. General information
 
+<<<<<<< HEAD
 This document was last updated at 2019-02-06 01:02:59 using R Markdown
+=======
+This document was last updated at 2019-02-06 00:57:09 using R Markdown
+>>>>>>> 124a9e9ff27cc5d1740cd6f98bd35be380f259be
 (built with R version 3.5.1 (2018-07-02)). Markdown is a simple
 formatting syntax for authoring HTML, PDF, and MS Word documents. It is
 especially powerful at authoring documents and reports which include
