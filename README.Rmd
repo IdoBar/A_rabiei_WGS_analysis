@@ -1,0 +1,123 @@
+---
+title: "Whole Genome Sequencing of <i>Ascochyta rabiei</i> Isolates"
+author: "Ido Bar"
+date: "18 July 2017"
+always_allow_html: yes
+output: 
+    md_document:
+#      css: "style/style.css"
+      toc: true
+      toc_depth: 3
+#      highlight: pygments
+#      number_sections: false
+    # html_document:
+    #   css: "style/style.css"
+    #   toc: true
+    #   toc_float: true
+    #   toc_depth: 3
+    #   highlight: pygments
+    #   number_sections: false
+    #   code_folding: hide
+    #   keep_md: true
+bibliography: style/Fungal_genomes.bib
+csl: style/springer-basic-improved-author-date-with-italic-et-al-period.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
+# options(width = 180)
+cran_packages <- c("tidyverse", "knitr", "pander", "captioner", "DT", "circlize", "htmltab")
+pacman::p_load(char=cran_packages, repos="https://cran.rstudio.com/")
+# Connect to Zotero to access references
+# biblio <- ReadBib("data/Fungal_genomes.bib") # , "bibtex", "RefManageR"
+# Font Format
+custom_font="consolas"
+fontFmt = function(x,font="consolas"){
+  #outputFormat = knitr::opts_knit$get("rmarkdown.pandoc.to")
+  #if (outputFormat == 'html')
+  formatted_text <- sprintf("<font face='%s'>%s</font>",font,x)
+  return(formatted_text)
+  #else
+  #  x
+}
+```
+
+
+
+```{r captions, include=FALSE, eval=TRUE}
+figs <- captioner(prefix="Figure")
+tbls <- captioner(prefix="Table")
+tbls(name="samples","Ascochyta rabiei isolates used for DNA sequencing.")
+tbls(name="tfam","PLINK's .tfam file format.")
+tbls(name="mapping_rates", "Mapping rates of the WGS reads to the Ascochyta rabiei Me14 reference genome.")
+tbls(name="mapping_sum", "Mapping statistics for 2017 and 2018 sequencing batches.")
+figs(name="GC_cont", "GC (%) content in trimmed WGS reads.")
+isolate_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", sheet = "Sequenced")
+sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", sheet = "submission_info") 
+sequencing_dict <- set_names(sequencing_table$Isolate, sequencing_table$Submission_id)
+samples_table <- isolate_table %>% arrange(desc(Pathogenicity), desc(Collection_Year), Site)
+
+#readxl::read_excel("../P_rabiei_isolate_list_for_wgs.xlsx", sheet = "Sequenced") %>%
+  # filter(!is.na(Sequenced))  %>% inner_join(isolate_table) %>%
+  # mutate(Collection_Year=as.character(isolate_table$Year[match(Isolate, isolate_table$isolate_name)]),
+  #        Collection_Year=if_else(!is.na(Collection_Year), Collection_Year, 
+  #                         paste0("20", sub("[A-Z]*(\\d{2}).+", "\\1", Isolate)))) %>%
+  # dplyr::select(Isolate, Site, State, Collection_Year, Rating, Pathogenicity,Haplotype) %>%
+   # %>% write_csv("isolate_list_WGS_2018.csv")
+# xlsx::write.xlsx(as.data.frame(samples_table))
+tfam_table <- samples_table  %>% dplyr::select(State, Isolate) %>%
+  mutate(V3=0, V4=0, V5=0, V6=-9)
+#figs(name="WtFreq1","Weight frequency of Ruffe captured in 1992.")
+
+```
+
+# Whole Genome Sequencing of <i>Ascochyta rabiei</i> Isolates
+## Experimental Design
+In 2017, DNA was extracted from 21 strains of _Ascochyta rabiei_ and sent for Whole-Genome-Sequencing (WGS) on an Illumina HiSeq2500, producing 100 bp short paired-end reads (Macrogen, Korea).  
+In the following year (2018), DNA from 20 additional *A. rabiei* isolates was extracted and sent for WGS, first to AgriBio, Centre for AgriBioscience, Agriculture Victoria Research and on a HiSeq2500, producing 150 bp short paired-end reads. Since the library preparation and sequencing was substantially delayed, 18 DNA samples, mostly overlapping with the 20 samples sent for AgriVic, were sent for sequencing at the Australian Genome Research Facility (AGRF, Melbourne) on 4 lanes of a NextSeq flowcell, producing 150 bp paried-end reads (run name CAGRF19461).  
+Details of the sequenced isolates is provided in (`r tbls(name="samples",display="cite")`).
+
+```{r eval=TRUE} 
+pander(as.data.frame(samples_table), caption=tbls("samples"), justify="left") 
+```
+
+## Aims
+* Identify strain-unique variants to develop detection methods
+* Associate aggressiveness with specific variants
+
+## Analysis Pipeline
+### General overview:
+1. Data pre-processing:
+    a. Quality check
+    b. Adaptor trimming
+    c. Post-trim quality check
+2. Mapping reads to a reference genome (keep unmapped)
+3. Reads deduplication
+4. Variant calling and filtration
+5. Variant annotation
+6. Variant-Pathogenicity association
+7. Produce variant statistics and assessment 
+
+### Methods
+DNA-Seq data processing and genome assembly were performed following the methods specified by @hagiwara_whole-genome_2014 (see details in Appendix 2), @haas_approaches_2011, @hittalmani_novo_2016 and @verma_draft_2016, with modification to run on the _Griffith University Gowonda HPC Cluster_ (using PBSPro scheduler) and using tools from `r fontFmt("BBtools")` (v38.22; @bushnell_bbmap:_2014). See official download page on [SourceForge](https://sourceforge.net/projects/bbmap/), [user guide](http://jgi.doe.gov/data-and-tools/bbtools/bb-tools-user-guide/bbduk-guide/) and [SEQanswers thread](http://seqanswers.com/forums/showthread.php?t=42776).   
+Detailed methods are provided in the included `A_rabiei_genome_sequencing.html` file.
+
+## Appendices
+### Appendix 1. Useful resources
+
+* Whole-Genome Comparison of _Aspergillus fumigatus_ Strains Serially Isolated from Patients with Aspergillosis. [@hagiwara_whole-genome_2014]:
+
+> **Sequence analysis:** The Illumina data sets were trimmed using fastq-mcf in ea-utils (version 1.1.2-484), i.e., sequencing adapters and sequences with low quality scores (Phred score [Q], <30) were removed (24). The data sets were mapped to the genome sequence of the _A. fumigatus_ genome reference strain Af293 (29,420,142 bp, genome version s03-m04-r03) (25, 26) using Bowtie 2 (version 2.0.0-beta7) with the very sensitive option in end-to-end mode (27). Duplicated reads were removed using Picard (version 1.112) (<http://picard.sourceforge.net>). The programs mpileup and bcftools from SAMtools (version 0.1.19-44428cd) were used to perform further quality controls. In mpileup, the -q20 argument was used to trim reads with low-quality mapping, whereas the argument -q30 was used to trim low-quality bases at the 3' end (28). The bcftools setting was set to -c in order to call variants using Bayesian inference. Consensus and single nucleotide polymorphisms (SNPs) were excluded if they did not meet a minimum coverage of 5x or if the variant was present in <90% of the base calls (29, 30). The genotype field in the variant call format (VCF) files indicates homozygote and heterozygote probabilities as Phred-scaled likelihoods. SNPs were excluded if they were called as heterozygous genotypes using SAMtools. The mapping results were visualized in the Integrative Genomics Viewer (version 2.3.3) (31, 32). The reference genome data included information on open reading frames and annotations, from which the SNPs were designated non-synonymous or synonymous.  
+Single nucleotide mutations were confirmed by Sanger sequencing. Regions of approximately 400 bp that contained a mutation were amplified with appropriately designed primer pairs and then sequenced. The primer sequences are listed in Table S1 in the supplemental material, which were named as follows. For verification of the SNPs in strains from patient I or patient II, PaI or PaII was added to the primer name, respectively. For non-synonymous SNPs, synonymous SNPs, or SNPs in a non-coding region, (NS, Syno, NonC) was added to the primer name, respectively.  
+**Analysis of unmapped reads:** _De novo_ assembly of the unmapped reads was conducted using the Newbler assembler 2.9 (Roche), with default parameters. The contigs were selected based on size/depth criteria: those of <500 bp and/or with a depth of <30x coverage were removed. To investigate whether unique genome sequences were present in strains isolated from the same patient, the unmapped reads of each strain were mapped to the contigs generated from all the strains in the same patient by the Bowtie 2 software. The coverage of the mapped regions was then evaluated. Gene predictions were performed using the gene prediction tool AUGUSTUS (version 2.5.5), with a training set of  _A. fumigatus_ (33). The parameters of AUGUSTUS were -species = aspergillus_fumigatus, -strand = both, -genemodel = partial, -singlestrand = false, -protein = on, -introns = on, -start = on, -stop = on, -cds = on, and -gff3 = on. To compare all the predicted genes with _Aspergillus_ genes, consisting of 244,811 genes available on AspGD (34), a reciprocal BLAST best hit approach was performed by BLASTp (35), with an E value of 1.0e<sup>-4</sup>. All BLASTp results were filtered based on a BLASTp identity of $\ge80$% and an aligned length coverage of $\ge80$%.
+
+### Appendix 2. General information
+This document was last updated at `r Sys.time()` using R Markdown (built with `r R.version.string`). Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. It is especially powerful at authoring documents and reports which include code and can execute code and use the results in the output. For more details on using R Markdown see <http://rmarkdown.rstudio.com> and [Rmarkdown cheatsheet](https://www.rstudio.com/wp-content/uploads/2016/03/rmarkdown-cheatsheet-2.0.pdf).
+
+***
+## Bibliography
+
+<!-- ```{r results='asis', eval=TRUE} -->
+<!-- PrintBibliography(biblio) -->
+<!-- ``` -->
+
