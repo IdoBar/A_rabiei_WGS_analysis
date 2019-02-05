@@ -1,0 +1,61 @@
+Submission_id	Isolate	Sequencing_Centre	Comments
+14DON003	14DON003	Macrogen	
+15CUR001	15CUR001	Macrogen	
+15CUR002	15CUR002	Macrogen	
+CUR003	15CUR003	Macrogen	Some bacterial contamination (~55%)
+15CUR005	15CUR005	Macrogen	Duplicate of FT15030
+DON001	15DON001	Macrogen	
+15DON007	15DON007	Macrogen	
+AGRF_01	16CUR015	AGRF	Some bacterial contamination (~30%)
+1	16CUR015	AgVic	
+16CUR017	16CUR017	Macrogen	
+AGRF_02	16CUR018	AGRF	Some bacterial contamination (~35%)
+2	16CUR018	AgVic	
+16CUR019	16CUR019	Macrogen	
+AGRF_03	16RUP012	AGRF	
+3	16RUP012	AgVic	
+AGRF_04	16RUP013	AGRF	
+4	16RUP013	AgVic	
+AGRF_05	17CUR007	AGRF	Highly contaminated with bacterial DNA (~80%)
+5A	17CUR007	AgVic	Some bacterial contamination (~65%)
+5B	17CUR007	AgVic	Highly contaminated with bacterial DNA (~90%)
+AGRF_06	F16083-1	AGRF	
+6	F16083-1	AgVic	
+AGRF_07	F16253-1	AGRF	
+7	F16253-1	AgVic	
+F16253-1	F16253-1	Macrogen	
+8	F17067-1	AgVic	
+AGRF_09	F17076-2	AGRF	
+9	F17076-2	AgVic	
+AGRF_10	F17175-1	AGRF	
+10	F17175-1	AgVic	
+AGRF_11	F17191-1	AGRF	
+11	F17191-1	AgVic	Some bacterial contamination (~20%)
+FT13092-2	FT13092-2	Macrogen	
+FT13092-4	FT13092-4	Macrogen	
+FT13092-6	FT13092-6	Macrogen	
+F15023	FT15023	Macrogen	Highly contaminated with bacterial DNA
+F15025	FT15025	Macrogen	
+F15028	FT15028	Macrogen	
+F15029	FT15029	Macrogen	
+FT15030	FT15030	Macrogen	Duplicate of 15CUR005
+TR6400	TR6400	Macrogen	
+TR6408	TR6408	Macrogen	
+TR6417	TR6417	Macrogen	
+AGRF_08	TR8102	AGRF	Highly contaminated with bacterial DNA (~85%)
+12	TR8102	AgVic	Some bacterial contamination (~60%)
+13	TR8105	AgVic	
+AGRF_12	TR9529	AGRF	Some bacterial contamination (~33%)
+14	TR9529	AgVic	Some bacterial contamination (~40%)
+AGRF_13	TR9538	AGRF	
+15	TR9538	AgVic	
+AGRF_14	TR9543	AGRF	Some bacterial contamination (~40%)
+16	TR9543	AgVic	Some bacterial contamination (~40%)
+AGRF_15	TR9544	AGRF	
+17	TR9544	AgVic	
+AGRF_16	TR9568	AGRF	Some bacterial contamination (~40%)
+18	TR9568	AgVic	Some bacterial contamination (~40%)
+AGRF_17	TR9571	AGRF	Some bacterial contamination (~45%)
+19	TR9571	AgVic	Some bacterial contamination (~40%)
+AGRF_18	TR9573	AGRF	Highly contaminated with bacterial DNA (~95%)
+20	TR9573	AgVic	Highly contaminated with bacterial DNA (~95%)
