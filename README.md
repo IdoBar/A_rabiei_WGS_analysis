@@ -32,8 +32,6 @@ on 4 lanes of a NextSeq flowcell, producing 150 bp paried-end reads (run
 name CAGRF19461).  
 Details of the sequenced isolates is provided in (Table 1).
 
-    pander(as.data.frame(samples_table), caption=tbls("samples"), justify="left") 
-
 <table>
 <caption>Table 1: Ascochyta rabiei isolates used for DNA sequencing. (continued below)</caption>
 <colgroup>
@@ -336,345 +334,135 @@ Details of the sequenced isolates is provided in (Table 1).
 </tbody>
 </table>
 
-<table style="width:99%;">
+<table style="width:21%;">
 <colgroup>
-<col width="15%" />
-<col width="18%" />
-<col width="15%" />
-<col width="12%" />
-<col width="22%" />
-<col width="15%" />
+<col width="20%" />
 </colgroup>
 <thead>
 <tr class="header">
-<th align="left">ICC3996</th>
-<th align="left">Genesis090</th>
-<th align="left">HatTrick</th>
-<th align="left">Rating</th>
 <th align="left">Pathogenicity</th>
-<th align="left">Haplotype</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">4</td>
-<td align="left">NA</td>
 </tr>
 <tr class="even">
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">4</td>
-<td align="left">NA</td>
 </tr>
 <tr class="odd">
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">4</td>
-<td align="left">NA</td>
 </tr>
 <tr class="even">
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">4</td>
-<td align="left">NA</td>
 </tr>
 <tr class="odd">
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">4</td>
-<td align="left">NA</td>
 </tr>
 <tr class="even">
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">4</td>
-<td align="left">ARH007</td>
 </tr>
 <tr class="odd">
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">4</td>
-<td align="left">ARH180</td>
 </tr>
 <tr class="even">
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">4</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">4</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="even">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">NA</td>
 </tr>
 <tr class="odd">
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">NA</td>
 </tr>
 <tr class="even">
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">NA</td>
 </tr>
 <tr class="odd">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">NA</td>
 </tr>
 <tr class="even">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="even">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">NA</td>
 </tr>
 <tr class="odd">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">NA</td>
 </tr>
 <tr class="even">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="even">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">ARH077</td>
 </tr>
 <tr class="even">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="even">
-<td align="left">Moderate</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">3</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Low</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">2</td>
-<td align="left">ARH136</td>
 </tr>
 <tr class="even">
-<td align="left">Low</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">2</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Low</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">2</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="even">
-<td align="left">Low</td>
-<td align="left">Moderate</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">2</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">1</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="even">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">1</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">1</td>
-<td align="left">NA</td>
 </tr>
 <tr class="even">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">1</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">1</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="even">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">High</td>
-<td align="left">High</td>
 <td align="left">1</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="odd">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
 <td align="left">0</td>
-<td align="left">NA</td>
 </tr>
 <tr class="even">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
 <td align="left">0</td>
-<td align="left">NA</td>
 </tr>
 <tr class="odd">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
 <td align="left">0</td>
-<td align="left">NA</td>
 </tr>
 <tr class="even">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
 <td align="left">0</td>
-<td align="left">NA</td>
 </tr>
 <tr class="odd">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
 <td align="left">0</td>
-<td align="left">ARH001</td>
 </tr>
 <tr class="even">
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
-<td align="left">Low</td>
 <td align="left">0</td>
-<td align="left">ARH001</td>
 </tr>
 </tbody>
 </table>
@@ -780,7 +568,7 @@ Appendices
 
 ### Appendix 2. General information
 
-This document was last updated at 2019-02-06 00:46:15 using R Markdown
+This document was last updated at 2019-02-06 01:02:59 using R Markdown
 (built with R version 3.5.1 (2018-07-02)). Markdown is a simple
 formatting syntax for authoring HTML, PDF, and MS Word documents. It is
 especially powerful at authoring documents and reports which include
