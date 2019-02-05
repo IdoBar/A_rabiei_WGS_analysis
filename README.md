@@ -568,7 +568,7 @@ Appendices
 
 ### Appendix 2. General information
 
-This document was last updated at 2019-02-06 01:02:59 using R Markdown
+This document was last updated at 2019-02-06 01:06:35 using R Markdown
 (built with R version 3.5.1 (2018-07-02)). Markdown is a simple
 formatting syntax for authoring HTML, PDF, and MS Word documents. It is
 especially powerful at authoring documents and reports which include
