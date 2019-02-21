@@ -150,14 +150,30 @@ READ_LENGTH=100
 RGPL=HiSeq2500 
 RGPU=HHCLJBCXY
 RGCN=Macrogen
+case $RGPL in
+    NextSeq )
+        CLUMP_PARAM="dupedist=40 spany" ;;
+    HiSeq2500 )
+        CLUMP_PARAM="dupedist=40" ;;
+    HiSeq3000 )
+        CLUMP_PARAM="dupedist=2500" ;;
+    HiSeq4000 )
+        CLUMP_PARAM="dupedist=2500" ;;
+    Novaseq )
+        CLUMP_PARAM="dupedist=12000" ;;
+    * )
+        CLUMP_PARAM="" ;;
+esac
 # Combine all _1 and _2 reads (ignoring contaminated/low quality samples)
-echo "cd \$PBS_O_WORKDIR; ls -1 ../*_R1.fastq.gz | egrep -v \"F15023\" | sort | xargs cat > raw_R1.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads
-echo "cd \$PBS_O_WORKDIR; ls -1 ../*_R2.fastq.gz | egrep -v \"F15023\" | sort | xargs cat > raw_R2.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads
+echo "cd $( pwd ); ls -1 ../*_R1.fastq.gz | egrep -v \"F15023\" | sort | xargs cat > raw_R1.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads
+echo "cd $( pwd ); ls -1 ../*_R2.fastq.gz | egrep -v \"F15023\" | sort | xargs cat > raw_R2.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads
 
 # Create the index, trim adapters, mapp and calculate quality matrices
-RECALC_ID=`echo "cd \$PBS_O_WORKDIR; bbduk.sh in=raw_R#.fq.gz out=stdout.fq ref=$BBMAP_DIR/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 minlen=$READ_LENGTH tpe tbo int=f | bbmap.sh in=stdin.fq out=raw.sam ref=$GENOME.fasta ambig=toss slow int && calctruequality.sh in=raw.sam ref=$GENOME.fasta callvariants ploidy=2" | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N recalc_qual | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` # 5247555.pbsserver
+RECALC_ID=$( echo "cd $( pwd ); bbduk.sh in=raw_R#.fq.gz out=stdout.fq ref=$BBMAP_DIR/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 minlen=$READ_LENGTH tpe tbo int=f | bbmap.sh in=stdin.fq out=raw.sam ref=$GENOME.fasta ambig=toss slow int && calctruequality.sh in=raw.sam ref=$GENOME.fasta callvariants ploidy=2" | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N recalc_qual ) # 5247555.pbsserver
+RECALC_ID=$( echo $RECALC_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}' )
+
 # Then perform adapter trimming, mapping, clumping, recalibration
-find ../ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v bbmap_dir=$BBMAP_DIR -v genome=$GENOME   'BEGIN{command=sprintf("bbduk.sh -Xmx1g ref=%s/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 qtrim=rl trimq=10 tpe tbo int minlen=30 ziplevel=9 ow", bbmap_dir)};{n=split($1,a,"/"); infile=gensub("_R1\\.", "_R#.", "1", $1); basename=gensub(/(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; printf("cd $PBS_O_WORKDIR; filterbytile.sh in=%s out=stdout.fq int=f | clumpify.sh in=stdin.fq out=stdout.fq int dedupe optical adjacent | bbduk.sh in=stdin.fq out=stdout.fq int recalibrate |  %s in=stdin.fq out=recal_trimmed_%s_R#.fastq.gz stats=%s.stats ow && bbmap.sh in=recal_trimmed_%s_R#.fastq.gz outm=stdout.sam outu=%s_bbmap_me14.unmapped.fq.gz machineout local ow int=f rgsm=%s rgid=%s_%s rgpl=HiSeq2500 rgpu=HHCLJBCXY rgcn=Macrogen pigz unpigz slow k=12 | picard SortSam I=/dev/stdin O=%s_bbmap_me14.csorted.bam SO=coordinate\n",infile, command, basename, basename, basename, basename, basename, basename, NR, b[1], basename)}' > ${RUN}.bash
+find ../ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v bbmap_dir=$BBMAP_DIR -v genome=$GENOME -v RGPL=$RGPL -v RGPU=$RGPU -v RGCN=$RGCN -v CLUMP_PARAM=$CLUMP_PARAM  'BEGIN{command=sprintf("bbduk.sh -Xmx1g ref=%s/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 qtrim=rl trimq=10 tpe tbo int minlen=30 ziplevel=9 ow", bbmap_dir)};{n=split($1,a,"/"); infile=gensub("_R1\\.", "_R#.", "1", $1); basename=gensub(/(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; printf("cd $PBS_O_WORKDIR; filterbytile.sh in=%s out=stdout.fq int=f | clumpify.sh in=stdin.fq out=stdout.fq int dedupe optical %s adjacent | bbduk.sh in=stdin.fq out=stdout.fq int recalibrate |  %s in=stdin.fq out=recal_trimmed_%s_R#.fastq.gz stats=%s.stats ow && bbmap.sh in=recal_trimmed_%s_R#.fastq.gz outm=stdout.sam outu=%s_bbmap_me14.unmapped.fq.gz machineout local ow int=f rgsm=%s rgid=%s_%s rgpl=%s rgpu=%s rgcn=%s pigz unpigz slow k=12 | picard SortSam I=/dev/stdin O=%s_bbmap_me14.csorted.bam SO=coordinate\n",infile, CLUMP_PARAM, command, basename, basename, basename, basename, basename, basename, NR, RGPL,RGPU, RGCN, basename)}' > ${RUN}.bash
 
 # Run on parallel nodes (faster and preferred)
 
@@ -172,7 +188,8 @@ gawk -v ARRAY_IND=$PBS_ARRAY_INDEX 'NR==ARRAY_IND' ${CMDS_FILE} | bash' > ${RUN}
 # Run the commands 
 JOB_NAME=${BATCH}_bb_recal
 JOBS_NUM=`wc -l ${RUN}.bash | gawk '{print $1}'`
-JOB_ID=`qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${RUN}.bash -W depend=afterok:$RECALC_ID ${RUN}.pbspro | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` 
+JOB_ID=$( qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${RUN}.bash -W depend=afterok:$RECALC_ID ${RUN}.pbspro ) 
+JOB_ID=$( echo $JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}' )
 # record the array ID: 5247580[] Macrogen batch on Gowonda
 # Check that all jobs finished successfuly
 grep "ExitStatus"  *m.e$JOB_ID.*
@@ -194,27 +211,28 @@ grep "Input:" ${RUN}.log | gawk 'NR%2==0' | gawk 'BEGIN{reads=0};{reads+=$2; avg
 
 # Run FastQC on the output files
 QC_JOB=${BATCH}_trim_qc
-QC_JOB_ID=` echo 'cd $PBS_O_WORKDIR; mkdir $QC_JOB; fastqc -t 12 -o $QC_JOB recal_trimmed_*.fastq.gz' | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -m be -M i.bar@griffith.edu.au -N trim_qc -W depend=afterok:$JOB_ID[] | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` # 5248661.pbsserver
-
+QC_JOB_ID=$( echo "cd $( pwd ) ; mkdir $QC_JOB; fastqc -t 12 -o $QC_JOB recal_trimmed_*.fastq.gz" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00  -N trim_qc -W depend=afterok:$JOB_ID[] ) # 5248661.pbsserver
+QC_JOB_ID=$( echo $QC_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}' )
 # Check that all jobs finished successfuly
 grep "ExitStatus"  *m.e$QC_JOB_ID.*
 
 # Run qualimap on sam files (files need to be sorted)
 # sort files and convert to bam (next time insert into mapping pipe)
 SORT_JOB="sort_sams"
-ls -1 *_bbmap_me14.sam  | parallel --dryrun "cd \$PBS_O_WORKDIR; picard SortSam I={} O={.}.csorted.bam SO=coordinate" > $SORT_JOB.cmds
-SORT_JOB_ID=`qsub -J1-$( wc -l $SORT_JOB.cmds | gawk '{print $1}' ) -N $SORT_JOB -vCMDS_FILE=$SORT_JOB.cmds $RUN.pbspro -W depend=afterok:$JOB_ID[] | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` # 5248662[].pbsserver
+ls -1 *_bbmap_me14.sam  | parallel --dryrun "cd $( pwd ); picard SortSam I={} O={.}.csorted.bam SO=coordinate" > $SORT_JOB.cmds
+SORT_JOB_ID=$( qsub -J1-$( wc -l $SORT_JOB.cmds | gawk '{print $1}' ) -N $SORT_JOB -vCMDS_FILE=$SORT_JOB.cmds $RUN.pbspro -W depend=afterok:$JOB_ID[] ) # 5248662[].pbsserver
+SORT_JOB_ID=$( echo $SORT_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}' )
 # Check that all jobs finished successfuly
 grep "ExitStatus"  *m.e$SORT_JOB_ID*
 
 QUALIMAP_JOB="${BATCH}_qualimap"
 ls -1 *_bbmap_me14.sam | gawk '{sub("_bbmap_me14.sam", ""); printf "%s\t%s_bbmap_me14.csorted.bam\n",$0, $0 }' > $QUALIMAP_JOB.samples
 
-QUALIMAP_JOB_ID=`echo "cd \$PBS_O_WORKDIR ; unset DISPLAY ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$SORT_JOB_ID[]` # 5248673.pbsserver
-
+QUALIMAP_JOB_ID=$( echo "cd $( pwd ) ; unset DISPLAY ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$SORT_JOB_ID[] ) # 5248673.pbsserver
+QUALIMAP_JOB_ID=$( echo $QUALIMAP_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}' )
 # multiqc report
 MULTIQC_JOB="${BATCH}_bb_qc"
-echo "cd \$PBS_O_WORKDIR ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID # 5248672.pbsserver
+echo "cd $( pwd ) ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID # 5248672.pbsserver
 # find and remove empty files
 find . -size 0 -exec rm {} + 
 ```
@@ -230,29 +248,48 @@ rsync -avh -e ssh IdoBar1@agrf-data.agrf.org.au:files/AGRF_CAGRF19461_HGMLMAFXY 
 ```{bash recal_trim_reads_AGRF}
 # Prepare the BBduk commands
 DATE=`date +%d_%m_%Y`
-RUN=BB_process_${DATE} # day of run was 02_02_2019
+BATCH=agrf
+RUN=${BATCH}_BB_process_${DATE} # day of run was 02_02_2019
 mkdir ${RUN}
 cd !$
 GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
 READ_LENGTH=150
-LANES=4
-BATCH=agrf
+LANES=$( ls -1 *.fastq.gz | egrep -o "_L[0-9]+?_" | sort | uniq | wc -l )
+RGPL=NextSeq 
+RGPU=HGMLMAFXY
+RGCN=AGRF
+case $RGPL in
+    NextSeq )
+        CLUMP_PARAM="dupedist=40 spany" ;;
+    HiSeq2500 )
+        CLUMP_PARAM="dupedist=40" ;;
+    HiSeq3000 )
+        CLUMP_PARAM="dupedist=2500" ;;
+    HiSeq4000 )
+        CLUMP_PARAM="dupedist=2500" ;;
+    Novaseq )
+        CLUMP_PARAM="dupedist=12000" ;;
+    * )
+        CLUMP_PARAM="" ;;
+esac
 # Combine the read files from each lane
-ls -1 ../Adapter_trim_07_01_2019/bbduk_clean_AGRF_*_R1.fastq.gz | sort | parallel -N$LANES "cat {} > {1/}"
+parallel --dryrun "eval cat {=s/L001/*/=} > combined_{=s:.*/::; s/L001/all_lanes/; =}" ::: ../*L001*gz
+# ls -1 ../Adapter_trim_07_01_2019/bbduk_clean_AGRF_*_R1.fastq.gz | sort | parallel -N$LANES "cat {} > {1/}"
 
 # Combine all _1 and _2 reads (ignoring contaminated/low quality samples)
-echo "cd \$PBS_O_WORKDIR; ls -1 ../AGRF_*_R1.fastq.gz | egrep -v \"AGRF_05|AGRF_08|AGRF_18\" | sort | xargs cat > raw_R1.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads
-echo "cd \$PBS_O_WORKDIR; ls -1 ../AGRF_*_R1.fastq.gz | egrep -v \"AGRF_05|AGRF_08|AGRF_18\" | sort | xargs cat > raw_R2.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads
+echo "cd $( pwd ); ls -1 ../AGRF_*_R1.fastq.gz | egrep -v \"AGRF_05|AGRF_08|AGRF_18\" | sort | xargs cat > raw_R1.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads
+echo "cd $( pwd ); ls -1 ../AGRF_*_R1.fastq.gz | egrep -v \"AGRF_05|AGRF_08|AGRF_18\" | sort | xargs cat > raw_R2.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads
 
 # Create the index, trim adapters, mapp and calculate quality matrices
-RECALC_ID=`echo "cd \$PBS_O_WORKDIR; bbduk.sh in=raw_R#.fq.gz out=stdout.fq ref=$BBMAP_DIR/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 minlen=$READ_LENGTH tpe tbo int=f | bbmap.sh in=stdin.fq out=raw.sam ref=$GENOME.fasta ambig=toss slow int && calctruequality.sh in=raw.sam ref=$GENOME.fasta callvariants ploidy=2" | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N recalc_qual | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` # 5247245.pbsserver
+RECALC_ID=$(echo "cd $( pwd ); bbduk.sh in=raw_R#.fq.gz out=stdout.fq ref=$BBMAP_DIR/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 minlen=$READ_LENGTH tpe tbo int=f | bbmap.sh in=stdin.fq out=raw.sam ref=$GENOME.fasta ambig=toss slow int && calctruequality.sh in=raw.sam ref=$GENOME.fasta callvariants ploidy=2" | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N recalc_qual ) # 5247245.pbsserver
+RECALC_ID=$( echo $RECALC_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}' )
 # Then perform adapter trimming, mapping, clumping, recalibration
-find ../ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v bbmap_dir=$BBMAP_DIR -v genome=$GENOME   'BEGIN{command=sprintf("bbduk.sh -Xmx1g ref=%s/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 qtrim=rl trimq=10 tpe tbo int minlen=30 ziplevel=9 ow", bbmap_dir)};{n=split($1,a,"/"); infile=gensub("_R1\\.", "_R#.", "1", $1); basename=gensub(/(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; m=split(basename,b,"_") ;sample=b[1]"_"b[2]; printf("cd $PBS_O_WORKDIR; filterbytile.sh in=%s out=stdout.fq int=f | clumpify.sh in=stdin.fq out=stdout.fq int dedupe optical spany adjacent | bbduk.sh in=stdin.fq out=stdout.fq int recalibrate |  %s in=stdin.fq out=recal_trimmed_%s_R#.fastq.gz stats=%s.stats ow && bbmap.sh in=recal_trimmed_%s_R#.fastq.gz outm=%s_bbmap_me14.sam outu=%s_bbmap_me14.unmapped.fq.gz machineout local ow int=f rgsm=%s rgid=%s rgpl=NextSeq rgpu=HGMLMAFXY rgcn=AGRF pigz unpigz slow k=12\n",infile, command, basename, basename, basename, basename, sample, sample, basename)}' > ${RUN}.bash
+find ../ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v bbmap_dir=$BBMAP_DIR -v genome=$GENOME -v RGPL=$RGPL -v RGPU=$RGPU -v RGCN=$RGCN -v CLUMP_PARAM=$CLUMP_PARAM 'BEGIN{command=sprintf("bbduk.sh -Xmx1g ref=%s/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 qtrim=rl trimq=10 tpe tbo int minlen=30 ziplevel=9 ow", bbmap_dir)};{n=split($1,a,"/"); infile=gensub("_R1\\.", "_R#.", "1", $1); basename=gensub(/(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; m=split(basename,b,"_") ;sample=b[1]"_"b[2]; printf("cd $PBS_O_WORKDIR; filterbytile.sh in=%s out=stdout.fq int=f | clumpify.sh in=stdin.fq out=stdout.fq int dedupe optical %s adjacent | bbduk.sh in=stdin.fq out=stdout.fq int recalibrate |  %s in=stdin.fq out=recal_trimmed_%s_R#.fastq.gz stats=%s.stats ow && bbmap.sh in=recal_trimmed_%s_R#.fastq.gz outm=%s_bbmap_me14.sam outu=%s_bbmap_me14.unmapped.fq.gz machineout local ow int=f rgsm=%s rgid=%s rgpl=%s rgpu=%s rgcn=%s pigz unpigz slow k=12\n",infile, CLUMP_PARAM, command, basename, basename, basename, sample, sample, sample, basename,RGPL,RGPU,RGCN)}' > ${RUN}.bash
 # Run on local node
 # parallel --eta < ${RUN}.bash
 
 # Run on parallel nodes (faster and preferred)
-CMDS_FILE=`ls -1 ${RUN}.bash`
+CMDS_FILE=$( ls -1 ${RUN}.bash )
 
 # Prepare PBS script
 echo '#!/bin/bash -v
@@ -265,7 +302,8 @@ gawk -v ARRAY_IND=$PBS_ARRAY_INDEX 'NR==ARRAY_IND' ${CMDS_FILE} | bash' > ${RUN}
 # Run the commands 
 JOB_NAME=${BATCH}_bb_recal_trim
 JOBS_NUM=`wc -l ${RUN}.bash | gawk '{print $1}'`
-JOB_ID=`qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${RUN}.bash -W depend=afterok:$RECALC_ID ${RUN}.pbspro | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` 
+JOB_ID=$( qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${RUN}.bash -W depend=afterok:$RECALC_ID ${RUN}.pbspro )
+JOB_ID=$( echo $JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}' ) 
 
 # array ID 5247529 for 3rd batch (AGRF, Feb 2019) on Gowonda
 # Check that all jobs finished successfuly
@@ -287,7 +325,8 @@ egrep "Executing align2.BBMap|Mapped_Percent"  ${RUN}.log | gawk -v ORS="\t" -F 
 
 # Run FastQC on the output files
 QC_JOB=${BATCH}_trim_fastqc
-QC_JOB_ID=` echo 'cd $PBS_O_WORKDIR; mkdir $QC_JOB; fastqc -t 12 -o $QC_JOB recal_trimmed_*.fastq.gz' | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -m be -M i.bar@griffith.edu.au -N ${QC_JOB:0:11} -W depend=afterok:$JOB_ID[] | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` # 5248660.pbsserver
+QC_JOB_ID=$( echo "cd $( pwd ); mkdir $QC_JOB; fastqc -t 12 -o $QC_JOB recal_trimmed_*.fastq.gz" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00  -N ${QC_JOB:0:11} -W depend=afterok:$JOB_ID[] )
+QC_JOB_ID=$( echo $QC_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}') # 5248660.pbsserver
 
 # Check that all jobs finished successfuly
 grep "ExitStatus"  *m.e$QC_JOB_ID.*
@@ -296,7 +335,8 @@ grep "ExitStatus"  *m.e$QC_JOB_ID.*
 MERGE_JOB=merged_bams
 mkdir $MERGE_JOB
 ls -1 *_bbmap_me14.sam | gawk -vORS=" " 'NR%4==1{BASE=gensub("_HGMLMAFXY_.+", "", $1); printf "cd $PBS_O_WORKDIR; picard MergeSamFiles O=merged_bams/%s_bbmap_me14.csorted.bam I=%s ", BASE, $1} NR%4==2{print "I="$1} NR%4==3{print "I="$1} NR%4==0{printf "I=%s\n", $1}' > $MERGE_JOB.cmds
-MERGE_JOB_ID=`qsub -J1-$( wc -l $MERGE_JOB.cmds | gawk '{print $1}' ) -N ${MERGE_JOB:0:11} -vCMDS_FILE=$MERGE_JOB.cmds ${RUN}.pbspro | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` # 5247559[].pbsserver
+MERGE_JOB_ID=$( qsub -J1-$( wc -l $MERGE_JOB.cmds | gawk '{print $1}' ) -N ${MERGE_JOB:0:11} -vCMDS_FILE=$MERGE_JOB.cmds ${RUN}.pbspro )
+MERGE_JOB_ID=$( echo $MERGE_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}' ) # 5247559[].pbsserver
 
 # Run qualimap on merged bam files
 cd $MERGE_JOB
@@ -305,13 +345,14 @@ cd $MERGE_JOB
 QUALIMAP_JOB="${BATCH}_qualimap"
 ls -1 *_bbmap_me14.sam | gawk '{sub("_bbmap_me14.sam", ""); printf "%s\t%s_bbmap_me14.csorted.bam\n",$0, $0 }' > $QUALIMAP_JOB.samples
 
-QUALIMAP_JOB_ID=`echo "cd \$PBS_O_WORKDIR ; unset DISPLAY ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$MERGE_JOB_ID[]` # 5248672.pbsserver
+QUALIMAP_JOB_ID=$( echo "cd $( pwd ) ; unset DISPLAY ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$MERGE_JOB_ID[] ) # 5248672.pbsserver
+QUALIMAP_JOB_ID=$( echo $QUALIMAP_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
 
 cd -
 
 # multiqc report
 MULTIQC_JOB="${BATCH}_bb_qc"
-echo "cd \$PBS_O_WORKDIR ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID
+echo "cd $( pwd ) ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID
 
 # find and remove empty files
 find . -size 0 -exec rm {} +
@@ -323,7 +364,7 @@ find . -size 0 -exec rm {} +
 ```{bash recal_trim_reads_AgVic}
 cd ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018
 # fix read file names
-my_rename -v 's/_001//' *.fastq.gz
+my_rename -v 's/_001//; s/HWYNNBBXX_//' *.fastq.gz
 # Prepare the BBduk commands
 BATCH=agvic
 DATE=`date +%d_%m_%Y`
@@ -331,16 +372,37 @@ RUN=${BATCH}_BB_process_${DATE} # day of run was 02_02_2019
 mkdir ${RUN}
 cd !$
 GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
+LANES=`ls -1 *.fastq.gz | egrep -o "_L[0-9]+?_" | sort | uniq | wc -l`
 READ_LENGTH=150
+RGPL=HiSeq3000
+RGPU=HWYNNBBXX
+RGCN=AgriVic
+case $RGPL in
+    NextSeq )
+        CLUMP_PARAM="dupedist=40 spany" ;;
+    HiSeq2500 )
+        CLUMP_PARAM="dupedist=40" ;;
+    HiSeq3000 )
+        CLUMP_PARAM="dupedist=2500" ;;
+    HiSeq4000 )
+        CLUMP_PARAM="dupedist=2500" ;;
+    Novaseq )
+        CLUMP_PARAM="dupedist=12000" ;;
+    * )
+        CLUMP_PARAM="" ;;
+esac
 
 # Combine all _1 and _2 reads (ignoring contaminated/low quality samples)
-echo "cd \$PBS_O_WORKDIR; ls -1 ../*_R1.fastq.gz | egrep -v \"2_S34|11_S44|5B_S38\" | sort | xargs cat > raw_R1.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads
-echo "cd \$PBS_O_WORKDIR; ls -1 ../*_R2.fastq.gz | egrep -v \"2_S34|11_S44|5B_S38\" | sort | xargs cat > raw_R2.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads
+COMBINE_ID=$( echo "cd $( pwd ); ls -1 ../*_R1.fastq.gz | egrep -v '2_S34|11_S44|5B_S38' | sort | xargs cat > raw_R1.fq.gz && ls -1 ../*_R2.fastq.gz | egrep -v '2_S34|11_S44|5B_S38' | sort | xargs cat > raw_R2.fq.gz" | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=20:00 -N combine_reads )
+COMBINE_ID=$( $COMBINE_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}' )
+
 
 # Create the index, trim adapters, mapp and calculate quality matrices
-RECALC_ID=`echo "cd \$PBS_O_WORKDIR; bbduk.sh in=raw_R#.fq.gz out=stdout.fq ref=$BBMAP_DIR/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 minlen=$READ_LENGTH tpe tbo int=f | bbmap.sh in=stdin.fq out=raw.sam ref=$GENOME.fasta ambig=toss slow int && calctruequality.sh in=raw.sam ref=$GENOME.fasta callvariants ploidy=2" | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N recalc_qual | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` # 5248486.pbsserver
+RECALC_ID=$( echo "cd $( pwd ); bbduk.sh in=raw_R#.fq.gz out=stdout.fq ref=$BBMAP_DIR/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 minlen=$READ_LENGTH tpe tbo int=f | bbmap.sh in=stdin.fq out=raw.sam ref=$GENOME.fasta ambig=toss slow int ; calctruequality.sh in=raw.sam ref=$GENOME.fasta callvariants ploidy=2" | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N recalc_qual -W depend=afterok:$COMBINE_ID )
+RECALC_ID=$( echo $RECALC_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}') # 5248486.pbsserver
 # Then perform adapter trimming, mapping, clumping, recalibration
-find ../ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v bbmap_dir=$BBMAP_DIR -v genome=$GENOME   'BEGIN{command=sprintf("bbduk.sh -Xmx1g ref=%s/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 qtrim=rl trimq=10 tpe tbo int minlen=30 ziplevel=9 ow", bbmap_dir)};{n=split($1,a,"/"); infile=gensub("_R1\\.", "_R#.", "1", $1); basename=gensub(/(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; m=split(basename,b,"_") ;sample=b[2]"_"b[3]; printf("cd $PBS_O_WORKDIR; filterbytile.sh in=%s out=stdout.fq int=f | clumpify.sh in=stdin.fq out=stdout.fq int dedupe optical adjacent | bbduk.sh in=stdin.fq out=stdout.fq int recalibrate |  %s in=stdin.fq out=recal_trimmed_%s_R#.fastq.gz stats=%s.stats ow && bbmap.sh in=recal_trimmed_%s_R#.fastq.gz outm=stdout.sam outu=%s_bbmap_me14.unmapped.fq.gz machineout local ow int=f rgsm=%s rgid=%s rgpl=HiSeq2500 rgpu=%s rgcn=AgriVic pigz unpigz slow k=12 | picard SortSam I=/dev/stdin O=%s_bbmap_me14.csorted.bam SO=coordinate \n",infile, command, basename, basename, basename, sample, sample, sample, b[1], sample)}' > ${RUN}.bash
+find ../ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v bbmap_dir=$BBMAP_DIR -v genome=$GENOME -v RGPL=$RGPL -v RGPU=$RGPU -v RGCN=$RGCN -v  CLUMP_PARAM=$CLUMP_PARAM  'BEGIN{command=sprintf("bbduk.sh -Xmx1g ref=%s/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 qtrim=rl trimq=10 tpe tbo int minlen=30 ziplevel=9 ow", bbmap_dir)};{n=split($1,a,"/"); infile=gensub("_R1\\.", "_R#.", "1", $1); basename=gensub(/(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; m=split(basename,b,"_") ;sample=b[1]"_"b[2]; printf("cd $PBS_O_WORKDIR; filterbytile.sh in=%s out=stdout.fq int=f | clumpify.sh in=stdin.fq out=stdout.fq int dedupe optical %s adjacent | bbduk.sh in=stdin.fq out=stdout.fq int recalibrate |  %s in=stdin.fq out=recal_trimmed_%s_R#.fastq.gz stats=%s.stats ow && bbmap.sh in=recal_trimmed_%s_R#.fastq.gz outm=stdout.sam outu=%s_bbmap_me14.unmapped.fq.gz machineout local ow int=f rgsm=%s rgid=%s_%s rgpl=%s rgpu=%s rgcn=%s pigz unpigz slow k=12 | picard SortSam I=/dev/stdin O=%s_bbmap_me14.csorted.bam SO=coordinate \n",infile, CLUMP_PARAM, command, basename, basename, basename, basename, sample, sample, b[3], RGPL,RGPU,RGCN, sample)}' > ${RUN}.bash
+
 
 # Run on parallel nodes (faster and preferred)
 
@@ -358,7 +420,7 @@ JOBS_NUM=`wc -l ${RUN}.bash | gawk '{print $1}'`
 JOB_ID=`qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${RUN}.bash -W depend=afterok:$RECALC_ID ${RUN}.pbspro | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` 
 # record the array ID: 5247580[] Macrogen batch on Gowonda
 # Check that all jobs finished successfuly
-grep "ExitStatus"  *m.e$JOB_ID.*
+grep "ExitStatus"  *.e$JOB_ID.*
 # remove temp files
 rm raw.sam raw_R*.fq.gz
 # Check results 
@@ -377,7 +439,8 @@ grep "Input:" ${RUN}.log | gawk 'NR%2==0' | gawk 'BEGIN{reads=0};{reads+=$2; avg
 
 # Run FastQC on the output files
 QC_JOB=${BATCH}_trim_qc
-QC_JOB_ID=` echo 'cd $PBS_O_WORKDIR; mkdir $QC_JOB; fastqc -t 12 -o $QC_JOB recal_trimmed_*.fastq.gz' | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -m be -M i.bar@griffith.edu.au -N trim_qc -W depend=afterok:$JOB_ID[] | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` # 5248661.pbsserver
+QC_JOB_ID=$( echo "cd $( pwd ); mkdir $QC_JOB; fastqc -t 12 -o $QC_JOB recal_trimmed_*.fastq.gz" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -m be -M i.bar@griffith.edu.au -N trim_qc -W depend=afterok:$JOB_ID[] )
+QC_JOB_ID=$( echo $QC_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}') # 5248661.pbsserver
 
 # Check that all jobs finished successfuly
 grep "ExitStatus"  *m.e$QC_JOB_ID.*
@@ -385,19 +448,22 @@ grep "ExitStatus"  *m.e$QC_JOB_ID.*
 # Run qualimap on sam files (files need to be sorted)
 # sort files and convert to bam (next time insert into mapping pipe)
 SORT_JOB="sort_sams"
-ls -1 *_bbmap_me14.sam  | parallel --dryrun "cd \$PBS_O_WORKDIR; picard SortSam I={} O={.}.csorted.bam SO=coordinate" > $SORT_JOB.cmds
-SORT_JOB_ID=`qsub -J1-$( wc -l $SORT_JOB.cmds | gawk '{print $1}' ) -N $SORT_JOB -vCMDS_FILE=$SORT_JOB.cmds $RUN.pbspro -W depend=afterok:$JOB_ID[] | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` # 5248662[].pbsserver
+ls -1 *_bbmap_me14.sam  | parallel --dryrun "cd $( pwd ); picard SortSam I={} O={.}.csorted.bam SO=coordinate" > $SORT_JOB.cmds
+SORT_JOB_ID=$( qsub -J1-$( wc -l $SORT_JOB.cmds | gawk '{print $1}' ) -N $SORT_JOB -vCMDS_FILE=$SORT_JOB.cmds $RUN.pbspro -W depend=afterok:$JOB_ID[] )
+SORT_JOB_ID=$( echo $SORT_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}') # 5248662[].pbsserver
 # Check that all jobs finished successfuly
 grep "ExitStatus"  *m.e$SORT_JOB_ID*
 
 QUALIMAP_JOB="${BATCH}_qualimap"
 ls -1 *_bbmap_me14.sam | gawk '{sub("_bbmap_me14.sam", ""); printf "%s\t%s_bbmap_me14.csorted.bam\n",$0, $0 }' > $QUALIMAP_JOB.samples
 
-QUALIMAP_JOB_ID=`echo "cd \$PBS_O_WORKDIR ; unset DISPLAY ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$SORT_JOB_ID[]` # 5248673.pbsserver
+QUALIMAP_JOB_ID=$( echo "cd $( pwd ) ; unset DISPLAY ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$SORT_JOB_ID[] )
+# 5248673.pbsserver
+QUALIMAP_JOB_ID=$(echo $QUALIMAP_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
 
 # multiqc report
 MULTIQC_JOB="${BATCH}_bb_qc"
-echo "cd \$PBS_O_WORKDIR ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID #
+echo "cd $( pwd ) ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID #
 # find and remove empty files
 find . -size 0 -exec rm {} + 
 # remose sam file
@@ -512,17 +578,19 @@ cd !$
 GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
 
 # link all sam files in the same folder
-ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/BB_process_02_02_2019/*_bbmap_me14.csorted.bam ./
+ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/agvic_BB_process_07_02_2019/*_bbmap_me14.csorted.bam ./
 ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/*_bbmap_me14.csorted.bam ./
 ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/BB_process_02_02_2019/*_bbmap_me14.csorted.bam ./ 
 
-JOB="merge_sams"
+# remove lane information
+my_rename -v 's/_L00[1-9]//' *L00*.bam
+MERGE_JOB="merge_bams"
 
 IGNORE_SAMS='11_S44|5B_S38|2_S34|11_S44|15CUR005|AGRF_18|AGRF_08|F15023|20_S53'
 # merge sam files of duplicated samples and rename to isolate name
- egrep -v $IGNORE_SAMS ../A_rabiei_isolate_list_for_wgs.txt | tail -n+2 | sort -k2 | gawk -v ORS="" 'BEGIN{isolate=""; cmd="cd $PBS_O_WORKDIR; picard MergeSamFiles O=merged_sams/"}isolate!=$2{printf "\n%s%s_bbmap_me14.sam I=%s_bbmap_me14.sam", cmd, $2, $1; isolate=$2; next}isolate==$2{printf " I=%s_bbmap_me14.sam", $1}END{print "\n"}' | tail -n +2 > $JOB.cmds
+ egrep -v $IGNORE_SAMS ../A_rabiei_isolate_list_for_wgs.txt | tail -n+2 | sort -k2 | gawk -v JOB_DIR=$MERGE_JOB -v ORS="" 'BEGIN{isolate=""; cmd="cd $PBS_O_WORKDIR; picard MergeSamFiles O="}isolate!=$2{printf "\n%s%s/%s_bbmap_me14.csorted.bam I=%s_bbmap_me14.csorted.bam", cmd, JOB_DIR, $2, $1; isolate=$2; next}isolate==$2{printf " I=%s_bbmap_me14.csorted.bam", $1}END{print "\n"}' | tail -n +2 > $MERGE_JOB.cmds
  
-mkdir merged_sams
+mkdir $MERGE_JOB
 
 # Prepare PBS script
 echo '#!/bin/bash -v
@@ -530,19 +598,22 @@ echo '#!/bin/bash -v
 #PBS -l select=1:ncpus=12:mem=64GB,walltime=01:30:00
 
 cd $PBS_O_WORKDIR
-gawk -v ARRAY_IND=$PBS_ARRAY_INDEX 'NR==ARRAY_IND' ${CMDS_FILE} | bash' > $JOB.pbspro
+gawk -v ARRAY_IND=$PBS_ARRAY_INDEX 'NR==ARRAY_IND' ${CMDS_FILE} | bash' > $MERGE_JOB.pbspro
 
-qsub -J1-$( wc -l $JOB.cmds | gawk '{print $1}' ) -N $JOB -vCMDS_FILE=$JOB.cmds $JOB.pbspro
+MERGE_JOB_ID=$( qsub -J1-$( wc -l $MERGE_JOB.cmds | gawk '{print $1}' ) -N $MERGE_JOB -vCMDS_FILE=$MERGE_JOB.cmds $MERGE_JOB.pbspro )
 # 5248653[].pbsserver
-RECAL_SAMS=`ls -1 merged_sams/*_bbmap_me14.sam | gawk -v ORS="" 'NR==1; NR>1{printf ","$1}'`
+MERGE_JOB_ID=$( echo $MERGE_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
+RECAL_SAMS=$( ls -1 $MERGE_JOB/*_bbmap_me14.csorted.bam | gawk -v ORS="" 'NR==1; NR>1{printf ","$1}' )
 # check jobs completion
-grep "ExitStatus"  $JOB.e*
+grep "ExitStatus"  *.e$MERGE_JOB_ID*
 
 # "sample" flag is used to set sample names
-SAMPLES=`echo $RECAL_SAMS | sed -r 's/_bbmap_me14.sam//g'`
+# SAMPLES=$( ls -1 $MERGE_JOB/*_bbmap_me14.csorted.bam | gawk -v ORS="" -v SUBSTRING="/$MERGE_JOB\/(.*)_bbmap_me14.csorted.bam/" '{match($0, SUBSTRING, a)};NR==1{print a[1]}; NR>1{printf ","a[1]}' )
+SAMPLES=$( echo $RECAL_SAMS | sed "s|$MERGE_JOB/||g; s/_bbmap_me14.csorted.bam//g" )
 
 # Call variants (needs lots of memory, but very quick)
-echo "cd \$PBS_O_WORKDIR; callvariants.sh in=$RECAL_SAMS sample=$SAMPLES maf=0.02 rarity=0.02 minreads=5 multisample ploidy=2 border=20 out=A_rabiei_2018_isolates_Macro_AGRF_AgriVic.var vcf=A_rabiei_2018_isolates_Macro_AGRF_AgriVic.vcf ref=$GENOME.fasta"  | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N bb_callvars -m be -M i.bar@griffith.edu.au # 5248656.pbsserver
+echo "cd $( pwd ); callvariants.sh in=$RECAL_SAMS sample=$SAMPLES maf=0.02 rarity=0.02 minreads=5 multisample ploidy=2 ow border=20 out=A_rabiei_2018_isolates_Macro_AGRF_AgriVic.var vcf=A_rabiei_2018_isolates_Macro_AGRF_AgriVic.vcf ref=$GENOME.fasta"  | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N bb_callvars -m be -M i.bar@griffith.edu.au # 5248656.pbsserver
+# 55251485.pbsserver (12/02/2019)
 # find and remove empty files
 find . -size 0 -exec rm {} + 
 ```
@@ -552,11 +623,11 @@ GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabie
 # call duplicate sams
 # save table of duplicated samples
 gawk 'NR==FNR{s[$2]++;next} (s[$2]>1)' ../A_rabiei_isolate_list_for_wgs.txt ../A_rabiei_isolate_list_for_wgs.txt > duplicated_samples.txt
-DUP_SAMS=`gawk -v ORS="" 'NR==1{print $1"_bbmap_me14.sam"}; NR>1{printf ",%s_bbmap_me14.sam",$1}' duplicated_samples.txt`
-DUP_SAMPLES=`gawk -v ORS="" 'NR==1{printf "%s_%s",$2,NR}; NR>1{printf ",%s_%s",$2,NR}' duplicated_samples.txt`
+DUP_SAMS=$( gawk '{printf "%s_bbmap_me14.csorted.bam,",$1}' duplicated_samples.txt | sed 's/,$//' )
+DUP_SAMPLES=$( gawk '{printf "%s_%s,",$2,NR}' duplicated_samples.txt | sed 's/,$//' )
 
 # Call variants (needs lots of memory, but very quick)
-echo "cd \$PBS_O_WORKDIR; callvariants.sh in=$DUP_SAMS sample=$DUP_SAMPLES maf=0.02 rarity=0.02 minreads=5 multisample ploidy=2 border=20 out=A_rabiei_2018_dup_samples.var vcf=A_rabiei_2018_dup_samples.vcf ref=$GENOME.fasta"  | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N bb_calldups -m be -M i.bar@griffith.edu.au # 5248654.pbsserver
+echo "cd $( pwd ); callvariants.sh in=$DUP_SAMS sample=$DUP_SAMPLES maf=0.02 rarity=0.02 minreads=5 multisample ploidy=2 border=20 out=A_rabiei_2018_dup_samples.var vcf=A_rabiei_2018_dup_samples.vcf ref=$GENOME.fasta"  | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N bb_calldups -m be -M i.bar@griffith.edu.au # 5248654.pbsserver
 # find and remove empty files
 find . -size 0 -exec rm {} + 
 
@@ -592,7 +663,7 @@ Variants in coding regions of genes were identified as Synonymous/Non-synonymous
 ```{bash interproscan}
 # Download the python wrapper
 
-$HPC_GRID_RUNNER_DIR/BioIfx/hpc_FASTA_GridRunner.pl --cmd_template "cd $PBS_O_WORKDIR; pyenv shell  miniconda3-latest; ~/etc/tools/Annotation/InterPro/iprscan5_urllib3.py --sequence=__QUERY_FILE__ --outfile=__QUERY_FILE__.interpro.tsv --outformat=tsv --goterms --pathways --email=i.bar@griffith.edu.au " --query_fasta Assoc_SNP_genes_cds_05_02_2018.fasta -G $HPC_GRID_RUNNER_DIR/hpc_conf/small_PBS_jobs.conf -N 1 -O SNP_interpro
+$HPC_GRID_RUNNER_DIR/BioIfx/hpc_FASTA_GridRunner.pl --cmd_template "cd $PBS_O_WORKDIR; pyenv shell miniconda3-latest; ~/etc/tools/Annotation/InterPro/iprscan5_urllib3.py --sequence=__QUERY_FILE__ --outfile=__QUERY_FILE__.interpro.tsv --outformat=tsv --goterms --pathways --email=i.bar@griffith.edu.au " --query_fasta Assoc_SNP_genes_cds_05_02_2018.fasta -G $HPC_GRID_RUNNER_DIR/hpc_conf/small_PBS_jobs.conf -N 1 -O SNP_interpro
 ```
 
 Look for particular effector genes and genes associated with plant-pathogen interactions and pathogenicity genes. Look in the literature and create a list of target genes.
