@@ -13,11 +13,11 @@ vcf_filtration <- function(vcf_file, miss_rates = seq(0.2, 0.1, -0.05), geno_mis
   if (isTRUE(remove_hetero)){
     # Relace missing genotypes and heterozygotes with ./.
     vcf_data <- vcf_data %>% dplyr::mutate_at(vars(one_of(sample_cols)),
-                  .funs = funs(if_else(grepl("^1/0", .) | grepl("^0/1", .), "./.", .)))
+                  .funs = list(~if_else(grepl("^1/0", .) | grepl("^0/1", .), "./.", .)))
     LogMsg(sprintf("Resetting heterozygote calls (to ./.)"))
   }
   vcf_data <- vcf_data %>% dplyr::mutate_at(vars(one_of(sample_cols)),
-                                    .funs = funs(if_else(grepl("^\\.$", .), "./.", .)))
+                                    .funs = list(~if_else(grepl("^\\.$", .), "./.", .)))
   marker_msg <- "markers"
   if (isTRUE(poly_only)){
     parents <- sample_cols[grepl(check_poly_parents, sample_cols)]
