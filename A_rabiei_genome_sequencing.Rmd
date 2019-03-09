@@ -76,7 +76,7 @@ In 2017, DNA was extracted from 21 strains of _Ascochyta rabiei_ and sent for Wh
 In the following year (2018), DNA from 20 additional *A. rabiei* isolates was extracted and sent for WGS, first to AgriBio, Centre for AgriBioscience, Agriculture Victoria Research ([Dimpy](mailto:sukhjiwan.kaur\@ecodev.vic.gov.au) and [Brittney](mailto:brittney.caruana\@ecodev.vic.gov.au)) on a HiSeq3000, producing 150 bp paired-end reads. Since the library preparation and sequencing was substantially delayed, 18 DNA samples, mostly overlapping with the 20 samples sent for AgriVic, were sent for sequencing at the Australian Genome Research Facility (AGRF, Melbourne) on 4 lanes of a NextSeq500 flowcell, producing 150 bp paried-end reads (run name CAGRF19461).  
 Details of the sequenced isolates is provided in (`r tbls(name="samples",display="cite")`).
 
-```{r eval=TRUE} 
+```{r samples_table, eval=TRUE} 
 datatable(as.data.frame(samples_table), caption=tbls("samples")) %>% # , 
           # options = list(dom = 'tf', pageLength = 40)) %>%
   formatStyle('Pathogenicity',

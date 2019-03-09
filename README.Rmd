@@ -4,10 +4,13 @@ author: "Ido Bar"
 date: "18 July 2017"
 always_allow_html: yes
 output: 
-    md_document:
+      html_document:
+    #bookdown::html_document2:
+   #   base_format: rticles::jss_article
 #      css: "style/style.css"
       toc: true
       toc_depth: 3
+      keep_md: true
 #      highlight: pygments
 #      number_sections: false
     # html_document:
@@ -17,16 +20,17 @@ output:
     #   toc_depth: 3
     #   highlight: pygments
     #   number_sections: false
-    #   code_folding: hide
-    #   keep_md: true
+ #      code_folding: hide
+       
 bibliography: style/Fungal_genomes.bib
 csl: style/springer-basic-improved-author-date-with-italic-et-al-period.csl
+link-citations: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
 # options(width = 180)
-cran_packages <- c("tidyverse", "knitr", "pander", "captioner", "DT", "circlize", "htmltab")
+cran_packages <- c("tidyverse", "knitr","bookdown", "pander", "kableExtra", "captioner", "DT", "htmltab")
 pacman::p_load(char=cran_packages, repos="https://cran.rstudio.com/")
 # Connect to Zotero to access references
 # biblio <- ReadBib("data/Fungal_genomes.bib") # , "bibtex", "RefManageR"
@@ -48,21 +52,53 @@ fontFmt = function(x,font="consolas"){
 figs <- captioner(prefix="Figure")
 tbls <- captioner(prefix="Table")
 tbls(name="samples","Ascochyta rabiei isolates used for DNA sequencing.")
-isolate_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", sheet = "Sequenced")
+# isolate_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", sheet = "Sequenced")
 
-samples_table <- isolate_table %>% select(-one_of(c("ICC3996", "Genesis090", "HatTrick", "Rating", "Haplotype"))) %>% 
-  arrange(desc(Pathogenicity), desc(Collection_Year), Site)
+haplotype_info <- readxl::read_excel("../../A_rabiei_SSR/AGRF_SSR_2017/A_rabiei_SSR_2017_analysis/data/5_year_complete_SSR_db.xlsx", sheet = "Feb_2019") %>% dplyr::select(Region, Isolate=Ind, State, Collection_Year=Year, Haplotype)
+sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",sheet = "submission_info") 
+
+sequencing_dict <- set_names(sequencing_table$Isolate, sequencing_table$Submission_id)
+
+# load scoring table
+scoring_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", "Path_score") %>% 
+  filter(Host!="Seamer") %>% gather(key = "path_levels", value = "score", -Host) 
+scoring_set <- unique(scoring_table$Host)
+assign_score <- function(path_level, host, scoring_mat=scoring_table){
+  scoring_mat %>% dplyr::filter(Host==host, path_levels %in% path_level) %>% dplyr::select(score) %>% as.numeric()
+}
+
+# define pathotypes
+path_levels <- c("Low","Medium","Moderate","High","Very High", "Extreme") %>% factor(., levels = .)
+path_cols <- setNames(gplots::col2hex(c('limegreen','gold', 'orange', 'orangered', 'firebrick', 'violetred4')), path_levels)
+# Load sample table
+# readxl::excel_sheets("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx")
+samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", "Sequenced")  %>% 
+  dplyr::select(-Haplotype) %>% mutate(Host=sub("PBA ", "", `Host Cultivar`)) %>% 
+  left_join(haplotype_info) %>% mutate_at(scoring_set, ~str_replace_na(., "N/A")) %>% 
+  mutate_if(is.character, ~str_replace_na(., "Unknown")) 
+  
+samples_table$Pathogenicity <- rowSums(map_dfc(scoring_set, function(n) map_dbl(samples_table[[n]], ~assign_score(., n))))
+samples_table <- samples_table %>% 
+  mutate(Pathotype=path_levels[Pathogenicity+1])
+
 ```
 
 # Whole Genome Sequencing of <i>Ascochyta rabiei</i> Isolates
 ## Experimental Design
 In 2017, DNA was extracted from 21 strains of _Ascochyta rabiei_ and sent for Whole-Genome-Sequencing (WGS) on an Illumina HiSeq2500, producing 100 bp short paired-end reads (Macrogen, Korea).  
-In the following year (2018), DNA from 20 additional *A. rabiei* isolates was extracted and sent for WGS, first to AgriBio, Centre for AgriBioscience, Agriculture Victoria Research and on a HiSeq2500, producing 150 bp short paired-end reads. Since the library preparation and sequencing was substantially delayed, 18 DNA samples, mostly overlapping with the 20 samples sent for AgriVic, were sent for sequencing at the Australian Genome Research Facility (AGRF, Melbourne) on 4 lanes of a NextSeq flowcell, producing 150 bp paried-end reads (run name CAGRF19461).  
-Details of the sequenced isolates is provided in (`r tbls(name="samples",display="cite")`).
+In the following year (2018), DNA from 20 additional *A. rabiei* isolates was extracted and sent for WGS, first to AgriBio, Centre for AgriBioscience, Agriculture Victoria Research and on a HiSeq3000, producing 150 bp short paired-end reads. Since the library preparation and sequencing was substantially delayed, 18 DNA samples, mostly overlapping with the 20 samples sent for AgriVic, were sent for sequencing at the Australian Genome Research Facility (AGRF, Melbourne) on 4 lanes of a NextSeq500 flowcell, producing 150 bp paired-end reads (run name CAGRF19461).  
+Details of the sequenced isolates is provided in (`r tbls(name="samples", display="cite")`).
 
 
-```{r eval=TRUE, echo=FALSE} 
-pander(as.data.frame(samples_table), caption=tbls("samples"), justify="left") 
+```{r sample_table, eval=TRUE, echo=FALSE} 
+# pander(as.data.frame(samples_table), caption=tbls("samples"), justify="left") 
+samples_table %>% 
+  arrange(desc(Pathogenicity), desc(Collection_Year), Site) %>%
+    mutate(Pathotype=cell_spec(Pathotype, color = if_else(Pathogenicity>2, "white", "black"),
+                        background =factor(Pathotype, path_levels, path_cols))) %>% 
+  select(-one_of(c("ICC3996", "Genesis090", "HatTrick", "Rating", "Pathogenicity", "Sequenced"))) %>% 
+  kable(escape = F, caption = tbls(name="samples")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
 ```
 
 ## Aims
@@ -83,8 +119,9 @@ pander(as.data.frame(samples_table), caption=tbls("samples"), justify="left")
 7. Produce variant statistics and assessment 
 
 ### Methods
-DNA-Seq data processing and genome assembly were performed following the methods specified by @hagiwara_whole-genome_2014 (see details in Appendix 2), @haas_approaches_2011, @hittalmani_novo_2016 and @verma_draft_2016, with modification to run on the _Griffith University Gowonda HPC Cluster_ (using PBSPro scheduler) and using tools from `r fontFmt("BBtools")` (v38.22; @bushnell_bbmap:_2014). See official download page on [SourceForge](https://sourceforge.net/projects/bbmap/), [user guide](http://jgi.doe.gov/data-and-tools/bbtools/bb-tools-user-guide/bbduk-guide/) and [SEQanswers thread](http://seqanswers.com/forums/showthread.php?t=42776).   
-Detailed methods are provided in the included `A_rabiei_genome_sequencing.html` file.
+DNA-Seq data processing, mapping and variant calling were performed on the _Griffith University Gowonda HPC Cluster_ (using Torque scheduler), following the methods specified by @hagiwara_whole-genome_2014 (see details in Appendix 2), @haas_approaches_2011, @hittalmani_novo_2016 and @verma_draft_2016, with modification to use `r fontFmt("FreeBayes")` v1.2.0 [@garrison_haplotype-based_2012] to assign variant probability scores and call variants.  
+An alternative approach was tested, using a complete suite of tools from `r fontFmt("BBtools")` v38.22; @bushnell_bbmap:_2014. See official download page on [SourceForge](https://sourceforge.net/projects/bbmap/), [user guide](http://jgi.doe.gov/data-and-tools/bbtools/bb-tools-user-guide/bbduk-guide/) and [SEQanswers thread](http://seqanswers.com/forums/showthread.php?t=42776).   
+Detailed methods, including code for running each of the analyses steps are provided in the associated [A_rabiei_WGS_analysis GitHub repository](https://github.com/IdoBar/A_rabiei_WGS_analysis).
 
 ## Appendices
 ### Appendix 1. Useful resources
