@@ -19,17 +19,55 @@ pacman::p_load(char=CRAN_packages)
 #### Read data files ####
 # Read sample metadata and save to file
 analysis_basename="A_rabiei_2018"
-analysis_folder <- "../BB_vars_26_02_2019"
-sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",sheet = "submission_info")
-sequencing_dict <- set_names(sequencing_table$Isolate, sequencing_table$Submission_id)
-samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx") #,
-                                    # sheet = "Sequenced")
+variant_method <- "haplo.fb"
+analysis_folder <- "../FB_vars_01_03_2019"
+analysis_outdir <- glue("./output/{variant_method}/")
+haplotype_info <- readxl::read_excel("../../A_rabiei_SSR/AGRF_SSR_2017/A_rabiei_SSR_2017_analysis/data/5_year_complete_SSR_db.xlsx", sheet = "Feb_2019") %>% dplyr::select(Region, Isolate=Ind, State, Collection_Year=Year, Haplotype)
+sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",sheet = "submission_info") 
 
+sequencing_dict <- set_names(sequencing_table$Isolate, sequencing_table$Submission_id)
+
+# load scoring table
+scoring_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", "Path_score") %>% 
+  filter(Host!="Seamer") %>% gather(key = "path_levels", value = "score", -Host) 
+scoring_set <- unique(scoring_table$Host)
+assign_score <- function(path_level, host, scoring_mat=scoring_table){
+  scoring_mat %>% dplyr::filter(Host==host, path_levels %in% path_level) %>% dplyr::select(score) %>% as.numeric()
+}
+
+# define pathotypes
+path_levels <- c("Low","Medium","Moderate","High","Very High", "Extreme") %>% factor(., levels = .)
+# Load sample table
+# readxl::excel_sheets("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx")
+samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", "Sequenced")  %>% 
+  dplyr::select(-Haplotype) %>% mutate(Host=sub("PBA ", "", `Host Cultivar`)) %>% 
+  left_join(haplotype_info) %>% mutate_at(scoring_set, ~str_replace_na(., "N/A")) %>% 
+  mutate_if(is.character, ~str_replace_na(., "Unknown")) 
+  
+samples_table$Pathogenicity <- rowSums(map_dfc(scoring_set, function(n) map_dbl(samples_table[[n]], ~assign_score(., n))))
+samples_table <- samples_table %>% 
+  mutate(Pathotype=path_levels[Pathogenicity+1]) %>% 
+  write_xlsx(., 
+             glue("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx"), 
+             "sample_haplotype_details", append=TRUE)
+  #,
 # Read mapping stats (after preparation by the markdown notebook)
-mapping_stats <- recent_file("./output/results", glue("{analysis_basename}.+mapping.stats.txt")) %>%
-  read_tsv() 
-mapping_summary <- recent_file("./output/results", glue("{analysis_basename}.+mapping.sum.txt")) %>%
-  read_tsv() 
+mapping_stats <- recent_file(glue("{analysis_outdir}/results"), 
+                             glue("{analysis_basename}.+mapping.stats.txt")) %>% read_tsv() %>% 
+  write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
+                            "mapping_details")
+# combine stats from multiple sequencing samples/batches per isolate
+sequenced_isolates <- mapping_stats %>% group_by(Isolate) %>% 
+  summarise(GC_percentage=mean(GC_percentage), 
+            Mapping_quality_mean=mean(Mapping_quality_mean), 
+            Coverage=sum(Coverage)) %>% inner_join(samples_table, .) %>% 
+  write_xlsx(.,  glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
+             "mapping_per_sample", append=TRUE)
+mapping_summary <- recent_file(glue("{analysis_outdir}/results"), 
+                               glue("{analysis_basename}.+mapping.sum.txt")) %>%  read_tsv() %>% 
+  write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
+                        "batches_sum", append=TRUE)
+
 # mapping_summary <- mapping_stats %>% filter(Coverage>20) %>%
 #   group_by(Sequencing_Centre) %>%
 #   summarise(Coverage=sprintf("x%.2f",mean(Coverage)),
@@ -42,21 +80,25 @@ mapping_summary <- recent_file("./output/results", glue("{analysis_basename}.+ma
 
 # Save as a tfam file
 
-path_levels <- c("Low", "Medium", "Moderate", "High", "Very High")
-strata <- samples_table %>% # filter(!is.na(Sequencing_Centre)) %>%
-  mutate(INDIVIDUALS=Isolate, STRATA=path_levels[Pathogenicity+1],
-         Site=paste(Site, State, sep=", ")) %>%
-  dplyr::select(INDIVIDUALS, STRATA, Pathogenicity, Site, State, Collection_Year) %>%
-  left_join(mapping_stats[c("Isolate", "Coverage")],
-                                      by= c("INDIVIDUALS"="Isolate")) # %>% write_tsv(filedate(analysis_basename, ".strata", "./output/results", dateformat = FALSE))
+# path_levels <- c("Low", "Medium", "Moderate", "High", "Very High")
+# strata <- sequenced_isolates %>% # filter(!is.na(Sequencing_Centre)) %>%
+#   mutate(INDIVIDUALS=Isolate, STRATA=path_levels[Pathogenicity+1],
+#          Site=paste(Site, State, sep=", ")) %>%
+#   dplyr::select(INDIVIDUALS, STRATA, Pathogenicity, Site, State, Collection_Year, Coverage) # %>%
+#   # inner_join(mapping_per_isolate[c("Isolate", "Coverage")],
+#   #                                     by= c("INDIVIDUALS"="Isolate"))  %>% 
+#   write_tsv(filedate(analysis_basename, ".strata",glue("{analysis_outdir}/results"), dateformat = FALSE))
+
 
 
 #### VCF EDA with vcfR ####
 # vcf_file <- recent_file("./data", glue::glue("{analysis_basename}.+.vcf"))
-vcf_file <- recent_file(analysis_folder, glue("{analysis_basename}_isolates.+.vcf"))
+vcf_file <- recent_file(analysis_folder, glue("{analysis_basename}_isolates_{variant_method}.Qual20.U20.+poly.snps.vcf"))
 vcf_basename <- tools::file_path_sans_ext(basename(vcf_file))
 vcf <- read.vcfR(vcf_file)
 
+sequenced_isolates %>% filter(!Isolate %in% colnames(extract.gt(vcf))) %>% 
+  dplyr::select(Isolate)
 
 # Fix sample_names
 # colnames(vcf@gt)[colnames(vcf@gt) %in% agrf_table$Submission_ID] <- agrf_dict[colnames(vcf@gt)[colnames(vcf@gt) %in% agrf_table$Submission_ID]]
@@ -79,8 +121,9 @@ p + theme_bw() + theme(axis.title.x = element_blank(),
                             minor_breaks=c(1:10, 2:10*10, 2:8*100)) +
   theme(axis.title.y = element_text(size=12), panel.grid.major.y=element_line(color = "#A9A9A9", size=0.6), panel.grid.minor.y=element_line(color = "#C0C0C0", size=0.2)) +
   stat_summary(fun.y=median, geom="point", shape=23, size=2)
-ggsave(filename = glue::glue("./output/plots/{analysis_basename}_depth_dist.pdf"),
-       width = 12, height = 8)
+ggsave(filename = filedate(glue::glue("{analysis_basename}_depth_dist"), ext = ".pdf", 
+                           outdir = glue("{analysis_outdir}/plots/")), width = 12, height = 8)
+
 
 # Check missingness within samples
 head(extract.gt(vcf))
@@ -170,26 +213,20 @@ write.vcf(vcf, file = glue::glue("./output/data_files/{vcf_basename}.DP_corr.vcf
 # dev.off()
 
 # custom filtration
-source("./src/vcf_filtration.R")
-snpsift_filtered_file <- recent_file(analysis_folder, glue("{analysis_basename}_isolates.+passed.snps.vcf"))
-vcf_basename <- tools::file_path_sans_ext(basename(snpsift_filtered_file))
-filtered_vcf_file <-  glue::glue("./output/data_files/{vcf_basename}.poly.vcf")
-vcf_tab_filt <- vcf_filtration(snpsift_filtered_file, miss_rates = seq(0.2,0.1, -0.05),
-            geno_miss_rate=0.1, remove_hetero = FALSE, remove_multi_allele = FALSE, write_filtered_vcf = "", poly_only = TRUE)
+# source("./src/vcf_filtration.R")
+# snpsift_filtered_file <- recent_file(analysis_folder, glue("{analysis_basename}_isolates.+passed.snps.vcf"))
+# vcf_basename <- tools::file_path_sans_ext(basename(snpsift_filtered_file))
+# filtered_vcf_file <-  glue::glue("./output/data_files/{vcf_basename}.poly.vcf")
+# vcf_tab_filt <- vcf_filtration(snpsift_filtered_file, miss_rates = seq(0.2,0.1, -0.05),
+#             geno_miss_rate=0.1, remove_hetero = FALSE, remove_multi_allele = FALSE, write_filtered_vcf = "", poly_only = TRUE)
+# 
+# 
+# clean_vcf_data <- read_tsv(filtered_vcf_file, comment = "##")
+# 
+# # Fix sample names
+# AGRF_samples <- which(colnames(vcf_tab_filt) %in% agrf_table$Submission_ID)
+# if (length(AGRF_samples)>0) colnames(vcf_tab_filt)[AGRF_samples] <- agrf_dict[colnames(vcf_tab_filt)[AGRF_samples]]
 
-
-clean_vcf_data <- read_tsv(filtered_vcf_file, comment = "##")
-sample_cols <- colnames(clean_vcf_data)[10:ncol(clean_vcf_data)]
-# Fix sample names
-AGRF_samples <- which(colnames(vcf_tab_filt) %in% agrf_table$Submission_ID)
-if (length(AGRF_samples)>0) colnames(vcf_tab_filt)[AGRF_samples] <- agrf_dict[colnames(vcf_tab_filt)[AGRF_samples]]
-
-# output as tfam format
-tfam_table <- samples_table %>% filter(!is.na(Sequencing_Centre),
-                                       Isolate %in% sample_cols) %>%
-  dplyr::select(State, Isolate) %>%
-  mutate(V3=0, V4=0, V5=0, V6=-9) %>%
-  write_tsv(filedate(analysis_basename, ".tfam", "./output", dateformat = FALSE), col_names = FALSE)
 
 # write filtered vcf to file (not needed if done through the function)
 # system2("grep", args=c("'^##'", vcf_file), stdout = filtered_vcf_file)
@@ -197,13 +234,13 @@ tfam_table <- samples_table %>% filter(!is.na(Sequencing_Centre),
 
 
 # check error rates between replicate samples
-source("./src/estimate_error_rates_vcf_files.R")
-error_rates <- estimate_error_rates(filtered_vcf_file, grouping_suffix = "-[A-z]+$")
-# read genome data
-dna_file <- "../../A_rabiei_me14_short_names.fasta"
-dna <- ape::read.dna(dna_file, format = "fasta")
-gff_file <- "../../Arab_me14_short_names.gff"
-gff <- read.table(gff_file, sep="\t", quote="")
+# source("./src/estimate_error_rates_vcf_files.R")
+# error_rates <- estimate_error_rates(filtered_vcf_file, grouping_suffix = "-[A-z]+$")
+# # read genome data
+# dna_file <- "../../A_rabiei_me14_short_names.fasta"
+# dna <- ape::read.dna(dna_file, format = "fasta")
+# gff_file <- "../../Arab_me14_short_names.gff"
+# gff <- read.table(gff_file, sep="\t", quote="")
 
 # chrom <- create.chromR(name="Supercontig", vcf=vcf, seq=dna, ann=gff, verbose=FALSE)
 # chrom <- proc.chromR(chrom, verbose = TRUE)
@@ -216,8 +253,17 @@ gff <- read.table(gff_file, sep="\t", quote="")
 # plot(chrom)
 
 #### Analysis ####
-filtered_vcf <- read.vcfR(filtered_vcf_file)
-genind_obj <- vcfR2genind(filtered_vcf)
+# filtered_vcf <- read.vcfR(filtered_vcf_file)
+genind_obj <- vcfR2genind(vcf)
+# output as tfam format
+sample_cols <- colnames(extract.gt(vcf))
+tfam_table <- samples_table %>% filter(Isolate %in% sample_cols) %>% 
+  write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
+                                                                                "vcf_samples", append=TRUE) %>% 
+  dplyr::select(Host, Isolate, Pathogenicity) %>%
+  mutate(V3=0, V4=0, V5=0, V6=Pathogenicity) %>%
+  write_tsv(filedate(glue("{analysis_basename}_host_patho"), ".tfam", analysis_outdir, dateformat = FALSE), col_names = FALSE)
+
 # load to adegenet genlight (straight from tped file)
 # obj <- genomic_converter("data/A_rabiei_on_me14_DP_GQ_corr.bt2.fb.vcf", output = "genind", strata = paste0(analysis_basename, ".strata"),  snp.ld = "maf",parallel.core = 0) #  imputation.method="rf",
 # # fix chromosome names
@@ -233,39 +279,57 @@ X <- tab(genind_obj, freq = TRUE, NA.method = "mean")
 pca1 <- dudi.pca(X, scale = FALSE, scannf = FALSE, nf = 4)
 
 pca_data <- pca1$li %>% rownames_to_column("Isolate")  %>%
-  left_join(., strata, by = c( "Isolate"= "INDIVIDUALS")) %>%
-  mutate(Pathotype=factor(STRATA, levels=path_levels),
-      Sequencing_Platform=if_else(Sequencing_Centre=="AGRF", "NextSeq", "HiSeq2500")) %>%
-  filter(!is.na(Pathotype))
+  inner_join(sequenced_isolates)# by = c( "Isolate"= "INDIVIDUALS")
+  # mutate(Pathotype=factor(STRATA, levels=path_levels)Host)
+  #        
+  #        ,
+  #     Sequencing_Platform=if_else(Sequencing_Centre=="AGRF", "NextSeq", "HiSeq2500")) %>%
+  # filter(!is.na(Pathotype))
 
 # Calculate variance for each component (columns starting with 'C')
 pca_var <- pca1$li %>% summarise_at(vars(starts_with("Axis")), var)
 # Calculate the percentage of each component of the total variance
 percentVar <- pca_var/sum(pca_var)
 # Define colour palette, but get rid of the awful yellow - number 6
-pal <- brewer.pal(9, "Set1")[-6]
+pal <- brewer.pal(9, "Set1")
 # path_guide <- tibble(path_levels, col=pal[c(3,2,5,1,4)], size=seq(2,4,length.out = 5))
 path_sizes <- setNames(seq(2,4,length.out = 5), path_levels)
-path_cols <- setNames(pal[c(3,2,5,1,4)], path_levels)
+path_cols <- setNames(pal[c(3,2,5,1,4,9)], path_levels)
+seq_cols <- adjustcolor( c("grey15", "dodgerblue3"), alpha.f = 0.8)
+shapes <- c(21:25)
 # Isolate to annotate
-outliers <- c("TR9571", "TR9543", "TR9529", "15CUR003")
+# outliers <- pca_data %>% filter(Axis2< -2.5) %>% .[,"Isolate"]
+outliers <- pca_data %>% filter(grepl("PacBio", Sequenced, ignore.case = TRUE)) %>% .[,"Isolate"]
+# outliers <- c("16CUR017", "TR9543", "TR9529", "15CUR003") # PacBio-sequenced
+# outliers <- pca_data$Isolate
 # Create the plot for C1 and C2
-p <- ggplot(pca_data, aes(x=Axis1, y=Axis2, colour=Pathotype,
-                          # size=Pathogenicity,
-                          shape=Sequencing_Platform)) + geom_point(size=4.5, alpha = 0.8) +
-  # scale_color_gradient2() +
- scale_color_manual(values = path_cols) +
-  # scale_size_manual(values = path_sizes[pca_data$Pathogenicity]) +
-  geom_text_repel(aes(label=ifelse(Isolate %in% outliers, Isolate, ""))) +
-  plot_theme()
+p <- ggplot(pca_data, aes(x=Axis1, y=Axis2, fill=Pathotype, 
+                          size=Collection_Year,
+                          shape=Host)) 
 # Plot and add labels (represent component variance as a percentage)
-p +
-  labs(shape="Seq. Platform", x=glue("C1: {round(percentVar[1]*100,2)}% variance"),
-       y=glue("C1: {round(percentVar[2]*100,2)}% variance"))
+p + geom_point(alpha = 0.8) + # , stroke = 1
+  geom_text_repel(aes(colour=Sequenced, label=Isolate), show.legend = FALSE, 
+                  size=3.5, point.padding = 0.75) +
+  # geom_label_repel(aes(label=ifelse(Isolate %in% outliers, Isolate, "")), show.legend = FALSE, 
+  #                 size=3.5, point.padding = 0.75) +
+  # scale_color_() +
+  scale_fill_manual(values = path_cols, aesthetics = c("fill")) + scale_shape_manual(values = shapes) +
+  scale_color_manual(values=seq_cols) +
+    scale_size_continuous(range = c(4,6)) +
+  guides(shape = guide_legend(override.aes = list(size = 5, fill=path_cols[2]), order = 1),
+         fill = guide_legend(override.aes = list(size = 5, pch=shapes[1]), order = 2),
+         size = guide_legend(override.aes = list(fill=path_cols[2], pch=shapes[1]), order = 3) 
+         ) +
+  # scale_size_manual(values = path_sizes[pca_data$Pathogenicity]) +
+  
+  # geom_text_repel(aes(label=Haplotype), size=4, point.padding = 0.75) +
+  plot_theme(baseSize = 20) +
+  labs(shape="Host", size="Year", x=glue("C1: {round(percentVar[1]*100,2)}% variance"),
+       y=glue("C2: {round(percentVar[2]*100,2)}% variance"))
 # Save plot to a pdf file
-ggsave(filedate(glue::glue("{analysis_basename}_PCA_patho_platform"),
-                ext = ".pdf", outdir = "plots",
-                dateformat = FALSE), width = 10, height=7)
+ggsave(filedate(glue::glue("{analysis_basename}_PCA_patho_year_host_seq"),
+                ext = ".pdf", outdir = glue("{analysis_outdir}/plots"),
+                dateformat = FALSE), width = 10, height=8)
 
 
 #### GenABEL ####

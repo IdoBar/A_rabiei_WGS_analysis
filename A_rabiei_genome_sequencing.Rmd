@@ -18,7 +18,7 @@ output:
       highlight: pygments
       number_sections: false
       code_folding: hide
-      keep_md: true
+#      keep_md: true
 bibliography: style/Fungal_genomes.bib
 csl: style/springer-basic-improved-author-date-with-italic-et-al-period.csl
 ---
@@ -473,6 +473,9 @@ _To process mapping summary table, copy the `bbmap.stats` and `qualimap.html` fi
 ```{r mapping_table, eval=TRUE, echo=FALSE}
 analysis_folder <- "../BB_vars_26_02_2019"
 analysis_basename <- "A_rabiei_2018"
+variant_method <- "haplo.fb"
+# analysis_folder <- "../FB_vars_01_03_2019"
+# analysis_outdir <- glue("./output/{variant_method}/")
 
 mapping_table <- list.files(analysis_folder, ".bbmap.stats", full.names = TRUE) %>% map_df(read_tsv) %>% 
   mutate_at(vars(contains("mapped")),  ~as.numeric(sub("%", "", ., fixed=TRUE))/100) %>%
@@ -497,7 +500,7 @@ qualimap_results <-  qualimap_files %>% map_df(~htmltab(., which = "//td/b[text(
   left_join(., mapping_table) %>% 
   arrange(Isolate, desc(Coverage)) %>% set_names(., gsub(" ", "_", colnames(.))) %>%
   dplyr::select(Isolate, GC_percentage, Mapping_quality_mean, Mapping_rate, Coverage, Mapping_tool, Sample_id, Sequencing_Centre) %>%
-  write_tsv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.stats"), ".txt", "./output/results", dateformat = FALSE))
+  write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.stats"), ".txt", "./output/results", dateformat = FALSE))
 
 # Summarise mapping results
 mapping_summary <- qualimap_results %>% filter(Coverage>20) %>% 
@@ -509,7 +512,7 @@ mapping_summary <- qualimap_results %>% filter(Coverage>20) %>%
   # mutate(Reads_per_file=format(c(2224642.64, 36500108.00), 
   #                              digits = 2, scientific = TRUE)) %>%
   arrange(desc(Sequencing_Centre)) %>% 
-  write_tsv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.sum"), ".txt", "./output/results", dateformat = FALSE))
+  write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.sum"), ".txt", "./output/results", dateformat = FALSE))
 
 ```
 
@@ -543,41 +546,41 @@ include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
 
 
 ### Variant Call
-Variants were called from the recalibrated alignment files using `r fontFmt("callvariants.sh")`, adjusted to call rare variants (MAF=0.02) and ignore the first and last 20 bp at the ends of the reads (as discussed in [SeqAnswers](http://seqanswers.com/forums/showpost.php?p=208194&postcount=235)).
-One process called variants for duplicate samples, to identify error rates that occur from the sequencing and different platforms. For the final VCF file, the sam files of duplicate samples were combined to increase coverage and standardise sample names (as isolates) and another `r fontFmt("callvariants.sh")` was performed.
+#### Using FreeBayes
+The recalibrated alignment files of duplicate samples (excluding the ones that did not pass QC) were combined to increase coverage and standardise sample names as isolates (set as read groups). The isolate BAM files were merged once more into a single file that was used as input for `r fontFmt("FreeBayes")` v1.2.0 [@garrison_haplotype-based_2012] to assign variant probability scores and call variants.
 
-#### Call Variants using BBtools
-```{bash bbtools_varcall_me14}
+```{bash FB_var_call_combined}
 PLOIDY=1
 DATE=`date +%d_%m_%Y`
-RUN=BB_vars_${DATE} # day of run was 02_02_2019
-mkdir -p ~/scratch/data/A_rabiei_WGS/${RUN}
+RUN=FB_vars_${DATE} # day of run was 02_02_2019
+mkdir -p $HOME/scratch/data/A_rabiei_WGS/${RUN}
 cd !$
 # JOB_NAME="BBmap_me14_vars"
 GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
+ncpus=12
 
-# link all sam files in the same folder
-ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/agvic_BB_process_22_02_2019/*.csorted.bam ./
-ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BB_process_22_02_2019/*.csorted.bam ./
-ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BB_process_22_02_2019/*.csorted.bam ./ 
 
 # remove lane information
 my_rename -v 's/_L00[1-9]//' *L00*.bam
 MERGE_JOB="merge_bams"
+mkdir -p $MERGE_JOB
+cd !$
+# link all sam files in the same folder
+ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/agvic_BB_process_22_02_2019/*.csorted.bam ./
+ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BB_process_22_02_2019/*.csorted.bam ./
+ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BB_process_22_02_2019/*.csorted.bam ./
 
 IGNORE_SAMS='11_S44|5B_S38|2_S34|11_S44|15CUR005|AGRF_18|AGRF_08|F15023|20_S53'
 # merge sam files of duplicated samples and rename to isolate name
- egrep -v $IGNORE_SAMS ../A_rabiei_isolate_list_for_wgs.txt | tail -n+2 | sort -k2 | gawk -v JOB_DIR=$MERGE_JOB -v ORS="" 'BEGIN{isolate=""; cmd="cd $PBS_O_WORKDIR; picard MergeSamFiles O="}isolate!=$2{printf "\n%s%s/%s_bbmap_me14.csorted.bam I=%s_bbmap_me14.csorted.bam", cmd, JOB_DIR, $2, $1; isolate=$2; next}isolate==$2{printf " I=%s_bbmap_me14.csorted.bam", $1}END{print "\n"}' | tail -n +2 > $MERGE_JOB.cmds
+ egrep -v $IGNORE_SAMS $HOME/scratch/data/A_rabiei_WGS/A_rabiei_isolate_list_for_wgs.txt | tail -n+2 | sort -k2 | gawk  -v ORS="" 'BEGIN{cmd="cd $PBS_O_WORKDIR; picard MergeSamFiles QUIET=true COMPRESSION_LEVEL=0 O=/dev/stdout"}NR==1{printf "%s I=%s_bbmap_me14.csorted.bam", cmd, $1; isolate=$2; next}isolate!=$2{printf " | picard AddOrReplaceReadGroups I=/dev/stdin ID=%s LB=%s PL=Illumina PU=combined SM=%s O=%s.csorted.bam\n%s I=%s_bbmap_me14.csorted.bam", isolate, isolate, isolate,  isolate, cmd, $1; isolate=$2; next}isolate==$2{printf " I=%s_bbmap_me14.csorted.bam", $1}END{printf " | picard AddOrReplaceReadGroups I=/dev/stdin ID=%s LB=%s PL=Illumina PU=mixed SM=%s O=%s.csorted.bam\n", isolate, isolate, isolate,  isolate}'  > $MERGE_JOB.cmds
  
-mkdir $MERGE_JOB
-
 # Prepare PBS script
-echo '#!/bin/bash -v
+echo '#!'"/bin/bash -v
 #PBS -V
-#PBS -l select=1:ncpus=12:mem=64GB,walltime=01:30:00
-
+#PBS -l select=1:ncpus=${ncpus}:mem=64GB,walltime=01:30:00
+"'
 cd $PBS_O_WORKDIR
-gawk -v ARRAY_IND=$PBS_ARRAY_INDEX 'NR==ARRAY_IND' ${CMDS_FILE} | bash' > $MERGE_JOB.pbspro
+gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > $MERGE_JOB.pbspro
 
 MERGE_JOB_ID=$( qsub -J1-$( wc -l $MERGE_JOB.cmds | gawk '{print $1}' ) -N $MERGE_JOB -vCMDS_FILE=$MERGE_JOB.cmds $MERGE_JOB.pbspro )
 # 5248653[].pbsserver
@@ -586,54 +589,168 @@ MERGE_JOB_ID=$( echo $MERGE_JOB_ID | awk 'match($0,/[0-9]+/){print substr($0, RS
 # check jobs completion
 grep "ExitStatus"  *.e$MERGE_JOB_ID*
 
-# "sample" flag is used to set sample names
-# SAMPLES=$( ls -1 $MERGE_JOB/*_bbmap_me14.csorted.bam | gawk -v ORS="" -v SUBSTRING="/$MERGE_JOB\/(.*)_bbmap_me14.csorted.bam/" '{match($0, SUBSTRING, a)};NR==1{print a[1]}; NR>1{printf ","a[1]}' )
-BAMS=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -v ORS="" 'NR==1; NR>1{printf ","$1}' )
-SAMPLES=$( echo $BAMS | sed "s|$MERGE_JOB/||g; s/_bbmap_me14.csorted.bam//g" )
+cd - 
 
-# Call variants (needs lots of memory, but very quick)
-echo "cd $( pwd ); callvariants.sh in=$BAMS sample=$SAMPLES maf=0.02 rarity=0.02 minreads=5 multisample ploidy=$PLOIDY ow border=20 out=A_rabiei_2018_isolates_Macro_AGRF_AgriVic_haplo.var vcf=A_rabiei_2018_isolates_Macro_AGRF_AgriVic_haplo.vcf ref=$GENOME.fasta"  | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N bb_callvars -m e -M i.bar@griffith.edu.au # 5248656.pbsserver
-# 55251485.pbsserver (12/02/2019)
+# merge again to a single file
+BAMS=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -v ORS=" " '{print "I="$1}' )
+BAM_FILES=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -vORS=" " '1' )
+FINAL_MERGE=$( echo "cd $( pwd ) ; sambamba merge -t $ncpus all.csorted.combined.bam $BAM_FILES" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N Final_merge -W depend=afterok:$MERGE_JOB_ID[] ) # 5248672.pbsserver
+FINAL_MERGE_ID=$( echo $FINAL_MERGE | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
+
+# save read groups to file
+sambamba view -H all.csorted.combined.bam | grep "^@RG" > all_read_groups.txt
+# BAM_FILES=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -vORS=" " '1' )
+# calculate coverage
+CALC_COV=$( echo "cd $( pwd ) ;  sambamba depth base --combined all.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fasta.fai 500 > targets.regions " | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N Calc_cov -W depend=afterok:$FINAL_MERGE_ID ) # 5248672.pbsserver
+CALC_COV_ID=$( echo $CALC_COV | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
+# /export/home/s2978925/.pyenv/versions/miniconda2-latest/bin/bamtools coverage -in
+# prepare Freebayes commands
+FB=freebayes_${DATE}
+FB_CMDS=$( echo "cd $( pwd ) ; cat targets.regions | parallel --dry-run -k \"freebayes -p $PLOIDY -f $GENOME.fasta all.csorted.combined.bam --region {}\" > $FB.cmds" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N FB_cmds -W depend=afterok:$CALC_COV_ID ) # 5248672.pbsserver
+# get job_id
+FB_CMDS_ID=$( echo $FB_CMDS | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
+
+# Send freebayes jobs to the cluster
+# Prepare PBS script
+echo '#!'"/bin/bash -v
+#PBS -V
+#PBS -l select=1:ncpus=${ncpus}:mem=64GB,walltime=20:00:00
+"'
+cd $PBS_O_WORKDIR
+ARRAYID=$( echo $PBS_ARRAY_ID | egrep -o "[0-9]{7}" )
+gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR>=(${ncpus}*3*(ARRAY_IND-1)) && NR<=(ARRAY_IND*${ncpus}*3)' \${CMDS_FILE} | parallel -k -j ${ncpus} --joblog"' ${CMDS_FILE}.p$ARRAYID.$PBS_ARRAY_INDEX' > freebayes.pbspro
+
+NCMDS=$( wc -l $FB.cmds | gawk '{print $1}')
+NJOBS=$(( NCMDS/ncpus/3 + 1  ))
+FB_JOB=$( qsub -J1-$NJOBS -N ${FB:0:11} -W depend=afterok:$FB_CMDS_ID -vCMDS_FILE=$FB.cmds freebayes.pbspro )
+# 5270639[1-4] completed successfully (the rest needed more processing time)
+FB_JOB_ID=$( echo $FB_JOB | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
+
+CONCAT_FB=$( echo "cd $( pwd ) ; cat *.o$FB_JOB_ID* | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_isolates_haplo.fb.vcf" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=10:00:00 -N FB_vcf -W depend=afterok:$FB_JOB_ID[] -m e -M i.bar@griffith.edu.au)
+CONCAT_FB_ID=$( echo $CONCAT_FB | egrep -o "[0-9]{7}" )
+
+# check jobs completion
+grep "ExitStatus"  *.e* # | cat -d ":" -f2,2 | uniq
+# check for success/failure of FB commands
+tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==1' > $FB.failed.cmds
+tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==0' > $FB.successful.cmds
+
+# Produce vcf stats
+SAMPLES=$( cut -f6 all_read_groups.txt | gawk -F":" -vORS="," '{print $2}' | sed 's/,$//' )
+FB_STATS=$( echo "cd $( pwd ) ; mkdir ${FB}_stats; bcftools stats -F $GENOME.fasta -s $SAMPLES A_rabiei_2018_isolates_haplo.fb.vcf > ${FB}_stats/A_rabiei_2018_isolates_haplo.fb.vcf.stats; plot-vcfstats -p ${FB}_stats ${FB}_stats/A_rabiei_2018_isolates_haplo.fb.vcf.stats" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=10:00:00 -N FB_vcfstats -W depend=afterok:$CONCAT_FB_ID -m e -M i.bar@griffith.edu.au)
+FB_STATS_ID=$( echo $FB_STATS | egrep -o "[0-9]{7}" )
+
 # find and remove empty files
-find . -size 0 -exec rm {} + 
+find . -size 0 -exec rm {} +
+
 ```
 
-```{bash call_dup_sams}
-GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
+It is advised to process each bam separately as well to be able to estimate error rates and expected relatedness between duplicate samples.
+
+```{bash FB_var_call_ind}
 PLOIDY=1
-# call duplicate sams
-# save table of duplicated samples
-gawk 'NR==FNR{s[$2]++;next} (s[$2]>1)'  <(egrep -v $IGNORE_SAMS ../A_rabiei_isolate_list_for_wgs.txt ) <(egrep -v $IGNORE_SAMS ../A_rabiei_isolate_list_for_wgs.txt) > duplicated_samples.txt
-DUP_BAMS=$( gawk '{printf "%s_bbmap_me14.csorted.bam,",$1}' duplicated_samples.txt | sed 's/,$//' )
-DUP_SAMPLES=$( gawk '{printf "%s_%s,",$2,NR}' duplicated_samples.txt | sed 's/,$//' )
+DATE=`date +%d_%m_%Y`
+RUN=FB_vars_${DATE} # day of run was 02_02_2019
+mkdir -p $HOME/scratch/data/A_rabiei_WGS/${RUN}
+cd !$
+# JOB_NAME="BBmap_me14_vars"
+GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
+ncpus=12
+mkdir ind_bams
 
-# Call variants (needs lots of memory, but very quick)
-echo "cd $( pwd ); callvariants.sh in=$DUP_BAMS sample=$DUP_SAMPLES maf=0.02 rarity=0.02 minreads=5 multisample ploidy=$PLOIDY border=20 out=A_rabiei_2018_dup_samples_haplo.var vcf=A_rabiei_2018_dup_samples_haplo.vcf ref=$GENOME.fasta"  | qsub -V -l select=1:ncpus=12:mem=96GB,walltime=10:00:00 -N bb_calldups -m e -M i.bar@griffith.edu.au # 5248654.pbsserver
+# link all sam files in the same folder
+ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/agvic_BB_process_22_02_2019/*.csorted.bam ./ind_bams/
+ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BB_process_22_02_2019/*.csorted.bam ./ind_bams/
+ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BB_process_22_02_2019/*.csorted.bam ./ind_bams/
+# remove lane information
+my_rename -v 's/_L00[1-9]//' *L00*.bam
+MERGE_JOB="merge_bams"
+
+IGNORE_SAMS='11_S44|5B_S38|2_S34|11_S44|15CUR005|AGRF_18|AGRF_08|F15023|20_S53'
+
+# merge ind files to a single bam file (keep submission ids)
+# BAMS=$( ls -1 $MERGE_JOB/*.csorted.bam | egrep -v $IGNORE_SAMS| gawk -v ORS=" " '{print "I="$1}' )
+BAM_FILES=$( ls -1 ind_bams/*.csorted.bam | egrep -v $IGNORE_SAMS | gawk -vORS=" " '1' )
+FINAL_MERGE=$( echo "cd $( pwd ) ; sambamba merge -t $ncpus all_ind.csorted.combined.bam $BAM_FILES" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N Final_merge ) # 5248672.pbsserver
+FINAL_MERGE_ID=$( echo $FINAL_MERGE | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
+
+# save read groups to file
+sambamba view -H all_ind.csorted.combined.bam | grep "^@RG" > ind_read_groups.txt
+# BAM_FILES=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -vORS=" " '1' )
+
+# calculate coverage
+CALC_COV=$( echo "cd $( pwd ) ;  sambamba depth base --combined all_ind.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fasta.fai 500 > targets.regions " | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N Calc_cov -W depend=afterok:$FINAL_MERGE_ID ) # 5248672.pbsserver
+CALC_COV_ID=$( echo $CALC_COV | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
+# /export/home/s2978925/.pyenv/versions/miniconda2-latest/bin/bamtools coverage -in
+# prepare Freebayes commands
+FB=freebayes_${DATE}
+FB_CMDS=$( echo "cd $( pwd ) ; cat targets.regions | parallel --dry-run -k \"freebayes -p $PLOIDY -f $GENOME.fasta all_ind.csorted.combined.bam --region {}\" > $FB.cmds" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N FB_cmds -W depend=afterok:$CALC_COV_ID ) # 5248672.pbsserver
+# get job_id
+FB_CMDS_ID=$( echo $FB_CMDS | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
+
+# Send freebayes jobs to the cluster
+# Prepare PBS script
+echo '#!'"/bin/bash -v
+#PBS -V
+#PBS -l select=1:ncpus=${ncpus}:mem=64GB,walltime=20:00:00
+"'
+cd $PBS_O_WORKDIR
+ARRAYID=$( echo $PBS_ARRAY_ID | egrep -o "[0-9]{7}" )
+gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR>=(${ncpus}*3*(ARRAY_IND-1)) && NR<=(ARRAY_IND*${ncpus}*3)' \${CMDS_FILE} | parallel -k -j ${ncpus} --joblog"' ${CMDS_FILE}.p$ARRAYID.$PBS_ARRAY_INDEX' > freebayes.pbspro
+
+# check jobs completion
+grep "ExitStatus"  *.e* | cat -d ":" -f2,2 | uniq
+
+# After successful creation of the jobs
+NCMDS=$( wc -l $FB.cmds | gawk '{print $1}')
+NJOBS=$(( NCMDS/ncpus/3 + 1  ))
+FB_JOB=$( qsub -J1-$NJOBS -N ${FB:0:11}  -vCMDS_FILE=$FB.cmds freebayes.pbspro ) # 5270639[1-4] completed successfully (the rest needed more processing time)
+FB_JOB_ID=$( echo $FB_JOB | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}')
+
+CONCAT_FB=$( echo "cd $( pwd ) ; cat *.o$FB_JOB_ID* | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_isolates_haplo.ind.fb.vcf" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=10:00:00 -N FB_vcf -W depend=afterok:$FB_JOB_ID[] -m e -M i.bar@griffith.edu.au)
+CONCAT_FB_ID=$( echo $CONCAT_FB | egrep -o "[0-9]{7}" )
+
 # find and remove empty files
-find . -size 0 -exec rm {} + 
-rm -r *.csorted.bam $MERGE_JOB
+find . -size 0 -exec rm {} +
+
+# check jobs completion
+grep "ExitStatus"  *.e* # | cat -d ":" -f2,2 | uniq
+# check for success/failure of FB commands
+tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==1' > $FB.failed.cmds
+tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==0' > $FB.successful.cmds
+rm $FB.cmds.p*.*
+
+# Produce vcf stats
+SAMPLES=$( cut -f6 ind_read_groups.txt | gawk -F":" -vORS="," '{print $2}' | sed 's/,$//' )
+FB_STATS=$( echo "cd $( pwd ) ; mkdir ${FB}_stats; bcftools stats -F $GENOME.fasta -s $SAMPLES A_rabiei_2018_isolates_haplo.ind.fb.vcf > ${FB}_stats/A_rabiei_2018_isolates_haplo.ind.fb.vcf.stats; plot-vcfstats -p ${FB}_stats ${FB}_stats/A_rabiei_2018_isolates_haplo.ind.fb.vcf.stats" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=10:00:00 -N FB_vcfstats -W depend=afterok:$CONCAT_FB_ID -m e -M i.bar@griffith.edu.au)
+FB_STATS_ID=$( echo $FB_STATS | egrep -o "[0-9]{7}" )
+
+# find and remove empty files
+find . -size 0 -exec rm {} +
 
 ```
-
-```{bash vcf_filter_bbmap_me14}
-# Recode genotypes as missing if below a certain threshold, such as genotyping quality or depth (GQ:DP)  
-# Fix names 
-SnpSift filter "( DP>5 ) & ( FILTER='PASS' ) & ( TYP='SUB' )" A_rabiei_2018_isolates_Macro_AGRF_AgriVic_haplo.vcf | SnpSift gtfilter -gv './.' "( DP<5 ) | ( DP>500 ) "   > A_rabiei_2018_isolates_Macro_AGRF_AgriVic_haplo.DP.passed.snps.vcf
-# filter only SNPs
-SnpSift filter "( TYP='SUB' )" A_rabiei_2018_35_isolates_DP_corr.recal.vcf > A_rabiei_2018_35_isolates_DP_corr.snps.recal.vcf
-
-# make tfam file
-SnpSift vcf2tped -onlySnp ~/data/A_rabiei_sequencing/A_rabiei_2018_35_isolates.tfam A_rabiei_2018_35_isolates_DP_corr.recal.vcf A_rabiei_2018_35_isolates # A_rabiei_on_me14_DP_filtered 
-```
-
 
 #### VCF filtering
 Variants were filtered using `r fontFmt("SnpSift")` v4.3.1 [@ruden_using_2012], based on their total loci depth, keeping ony SNP loci with at least 100 reads covering the locus (DP$\ge100$) and not more than 2000 (based on EDA). In addition, each isolate genotype call was removed (recoded as `./.`) if it had read depth <5.
+```{bash vcf_filter}
+# Recode genotypes as missing if below a certain threshold, such as genotyping quality or depth (GQ:DP)  
+# filter only polymorphic SNPs, using QUAL>20, DP<36000/20000
+QUAL=20
+DP=20000
+SnpSift filter "( QUAL>$QUAL ) & ( TYPE='snp' ) & ( DP<$DP ) & ( countRef()>=1 & countVariant()>=1 )" A_rabiei_2018_isolates_haplo.ind.fb.vcf > A_rabiei_2018_isolates_haplo.ind.Qual${QUAL}.U${DP}DP.poly.snps.vcf
+
+SnpSift filter "( QUAL>$QUAL ) & ( TYPE='snp' ) & ( DP<$DP ) & ( countRef()>=1 & countVariant()>=1 )" A_rabiei_2018_isolates_haplo.fb.vcf > A_rabiei_2018_isolates_haplo.Qual${QUAL}.U${DP}DP.poly.snps.vcf
+
+# make tfam file
+SnpSift vcf2tped -onlySnp A_rabiei_2018_isolates.tfam A_rabiei_2018_isolates_haplo.Qual20.U20kDP.poly.snps.vcf A_rabiei_2018_isolates # A_rabiei_on_me14_DP_filtered 
+```
 
 
+Variants were called from the recalibrated alignment files using `r fontFmt("callvariants.sh")`, adjusted to call rare variants (MAF=0.02) and ignore the first and last 20 bp at the ends of the reads (as discussed in [SeqAnswers](http://seqanswers.com/forums/showpost.php?p=208194&postcount=235)).
+One process called variants for duplicate samples, to identify error rates that occur from the sequencing and different platforms. For the final VCF file, the sam files of duplicate samples were combined to increase coverage and standardise sample names (as isolates) and another `r fontFmt("callvariants.sh")` was performed.
 
 ### Variant Annotation
-Variants were then further filtered to keep only polymorphic and bi-allelic SNPs using the `r fontFmt("VariantAnnotation")` v`r packageVersion("VariantAnnotation")` and `r fontFmt("GenomicRanges")` v`r packageVersion("GenomicRanges")` R Bioconductor packages [@obenchain_variantannotation:_2014; @lawrence_software_2013]. The SNPs were annotated and position of each variant relative to gene locations was determined (coding/intron/promotor/intergenic), based on the reference genome and gene models of _A. rabiei_ strain _Me14_ (where the contig names were shortened to remove the `Arab_Me14` prefix. 
+Variants were then further filtered to keep only polymorphic and bi-allelic SNPs using the `r fontFmt("VariantAnnotation")` v`r packageVersion("VariantAnnotation")` and `r fontFmt("GenomicRanges")` v`r packageVersion("GenomicRanges")` R Bioconductor packages [@obenchain_variantannotation:_2014; @lawrence_software_2013]. The SNPs were annotated and position of each variant relative to gene locations was determined (coding/intron/promotor/intergenic), based on the reference genome and gene models of _A. rabiei_ strain _Me14_ (where the contig names were shortened to remove the `Arab_Me14` prefix). 
 
 ```{bash fix_contig_names}
 cat A.rabiei_me14.fasta | sed 's/Arab_Me14_//' > A_rabiei_me14_short_names.fasta
