@@ -97,13 +97,14 @@ datatable(as.data.frame(samples_table), caption=tbls("samples")) %>% # ,
 2. Mapping reads to a reference genome (keep unmapped)
 3. Reads deduplication
 4. Variant calling and filtration
-5. Variant annotation
+5. Variant annotation (including assigining SSR haplotypes)
 6. Variant-Pathogenicity association
 7. Produce variant statistics and assessment 
 
 ## Methods
-DNA-Seq data processing and genome assembly were performed following the methods specified by @hagiwara_whole-genome_2014 (see details in Appendix 2), @haas_approaches_2011, @hittalmani_novo_2016 and @verma_draft_2016, with modification to run on the _Griffith University Gowonda HPC Cluster_ (using PBSPro scheduler).
-At the current pipeline, each batch is processed separately due to slightly different file naming concentions. In future batches, the read files should be renamed following a standard naming conventions (starting from a pair of `Sample_id_FlowCell_R1.fastq.gz` file), which will make it much easier to process all batches with the same script, using parameters to specify batch name, read length, sequencing platform and other potential variables.
+DNA-Seq data processing, mapping and variant calling were performed on the _Griffith University Gowonda HPC Cluster_ (using Torque scheduler), following the methods specified by @hagiwara_whole-genome_2014 (see details in Appendix 2), @haas_approaches_2011, @hittalmani_novo_2016 and @verma_draft_2016, with modification to use `r fontFmt("FreeBayes")` v1.2.0 [@garrison_haplotype-based_2012] to assign variant probability scores and call variants.  
+An alternative approach was tested, using a complete suite of tools from `r fontFmt("BBtools")` v38.22; @bushnell_bbmap:_2014. See official download page on [SourceForge](https://sourceforge.net/projects/bbmap/), [user guide](http://jgi.doe.gov/data-and-tools/bbtools/bb-tools-user-guide/bbduk-guide/) and [SEQanswers thread](http://seqanswers.com/forums/showthread.php?t=42776).  
+At the current pipeline, each sequencing batch is processed separately due to slightly different file naming concentions. In future batches, the read files should be renamed following a standard naming conventions (starting from a pair of `Sample_id_FlowCell_R1.fastq.gz` file), which will make it much easier to process all batches with the same script, using parameters to specify batch name, read length, sequencing platform and other potential variables. Detailed methods, including code for running each of the analyses steps are provided in the associated [A_rabiei_WGS_analysis GitHub repository](https://github.com/IdoBar/A_rabiei_WGS_analysis).
 
 ### Data pre-processing
 Install needed software in a `conda` environment on Gowonda2.
