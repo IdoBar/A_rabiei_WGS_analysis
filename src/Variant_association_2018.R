@@ -42,7 +42,7 @@ path_levels <- c("Low","Medium","Moderate","High","Very High", "Extreme") %>% fa
 samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", "Sequenced")  %>% 
   dplyr::select(-Haplotype) %>% mutate(Host=sub("PBA ", "", `Host Cultivar`)) %>% 
   left_join(haplotype_info) %>% mutate_at(scoring_set, ~str_replace_na(., "N/A")) %>% 
-  mutate_if(is.character, ~str_replace_na(., "Unknown")) 
+  mutate_if(is.character, ~str_replace_na(., "Unknown")) %>% mutate(Haplotype=str_replace(Haplotype, "Unknown", "TBD"))
   
 samples_table$Pathogenicity <- rowSums(map_dfc(scoring_set, function(n) map_dbl(samples_table[[n]], ~assign_score(., n))))
 samples_table <- samples_table %>% 
@@ -51,11 +51,27 @@ samples_table <- samples_table %>%
              glue("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx"), 
              "sample_haplotype_details", append=TRUE)
   #,
+# add read numbers from the server 
+read_stats <-   recent_file("raw_data/", ".+raw_reads.tsv") %>% read_tsv(., col_names = c("filename", "pair", "reads")) %>% 
+    mutate(Sample_id=sub("_R[12].f.+q", "", filename)) 
+
 # Read mapping stats (after preparation by the markdown notebook)
 mapping_stats <- recent_file(glue("{analysis_outdir}/results"), 
                              glue("{analysis_basename}.+mapping.stats.txt")) %>% read_tsv() %>% 
+  inner_join(read_stats %>% group_by(Sample_id) %>% 
+               summarise(paired_reads=mean(reads))) %>% 
   write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
                             "mapping_details")
+# summarise stats per batch
+# mapping_summary <- recent_file(glue("{analysis_outdir}/results"), 
+#                                glue("{analysis_basename}.+mapping.sum.txt")) %>%  read_tsv() %>% 
+mapping_summary <- mapping_stats %>%  group_by(Sequencing_Centre) %>% 
+              summarise(Coverage=sprintf("x%.2f", mean(Coverage)), 
+                        Mapping_rate=mean(Mapping_rate), Mapping_qual=mean(Mapping_quality_mean), 
+                        Total_paired_reads=sum(paired_reads)/1e6, Files=n()) %>% 
+write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
+           "batches_sum", append=TRUE)
+
 # combine stats from multiple sequencing samples/batches per isolate
 sequenced_isolates <- mapping_stats %>% group_by(Isolate) %>% 
   summarise(GC_percentage=mean(GC_percentage), 
@@ -63,10 +79,7 @@ sequenced_isolates <- mapping_stats %>% group_by(Isolate) %>%
             Coverage=sum(Coverage)) %>% inner_join(samples_table, .) %>% 
   write_xlsx(.,  glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
              "mapping_per_sample", append=TRUE)
-mapping_summary <- recent_file(glue("{analysis_outdir}/results"), 
-                               glue("{analysis_basename}.+mapping.sum.txt")) %>%  read_tsv() %>% 
-  write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
-                        "batches_sum", append=TRUE)
+
 
 # mapping_summary <- mapping_stats %>% filter(Coverage>20) %>%
 #   group_by(Sequencing_Centre) %>%
@@ -279,7 +292,7 @@ X <- tab(genind_obj, freq = TRUE, NA.method = "mean")
 pca1 <- dudi.pca(X, scale = FALSE, scannf = FALSE, nf = 4)
 
 pca_data <- pca1$li %>% rownames_to_column("Isolate")  %>%
-  inner_join(sequenced_isolates)# by = c( "Isolate"= "INDIVIDUALS")
+  inner_join(sequenced_isolates) %>% mutate(seq_fontface=if_else(Sequenced=="Illumina", "plain", "bold"))# by = c( "Isolate"= "INDIVIDUALS")
   # mutate(Pathotype=factor(STRATA, levels=path_levels)Host)
   #        
   #        ,
@@ -293,9 +306,11 @@ percentVar <- pca_var/sum(pca_var)
 # Define colour palette, but get rid of the awful yellow - number 6
 pal <- brewer.pal(9, "Set1")
 # path_guide <- tibble(path_levels, col=pal[c(3,2,5,1,4)], size=seq(2,4,length.out = 5))
-path_sizes <- setNames(seq(2,4,length.out = 5), path_levels)
+# path_sizes <- setNames(seq(2,4,length.out = 5), path_levels)
 path_cols <- setNames(pal[c(3,2,5,1,4,9)], path_levels)
 seq_cols <- adjustcolor( c("grey15", "dodgerblue3"), alpha.f = 0.8)
+seq_face <- setNames(c("bold", "plain"),unique(pca_data$Sequenced))
+
 shapes <- c(21:25)
 # Isolate to annotate
 # outliers <- pca_data %>% filter(Axis2< -2.5) %>% .[,"Isolate"]
@@ -308,7 +323,7 @@ p <- ggplot(pca_data, aes(x=Axis1, y=Axis2, fill=Pathotype,
                           shape=Host)) 
 # Plot and add labels (represent component variance as a percentage)
 p + geom_point(alpha = 0.8) + # , stroke = 1
-  geom_text_repel(aes(colour=Sequenced, label=Isolate), show.legend = FALSE, 
+  geom_text_repel(aes(colour=Sequenced, label=Isolate, fontface=seq_fontface), show.legend = FALSE,
                   size=3.5, point.padding = 0.75) +
   # geom_label_repel(aes(label=ifelse(Isolate %in% outliers, Isolate, "")), show.legend = FALSE, 
   #                 size=3.5, point.padding = 0.75) +

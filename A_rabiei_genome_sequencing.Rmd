@@ -646,7 +646,7 @@ find . -size 0 -exec rm {} +
 
 ```
 
-It is advised to process each bam separately as well to be able to estimate error rates and expected relatedness between duplicate samples.
+It is advised to process each sample separately as well to be able to estimate error rates and expected relatedness between duplicate samples from the same isolate.
 
 ```{bash FB_var_call_ind}
 PLOIDY=1
@@ -657,6 +657,22 @@ cd !$
 # JOB_NAME="BBmap_me14_vars"
 GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
 ncpus=12
+
+# get number of reads from all input files
+mkdir raw_fq
+cd !$
+ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/*.f*q.gz ./
+ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BB_process_22_02_2019/AGRF_*R?.f*q.gz ./
+ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/*.f*q.gz ./
+# remove flowcell and barcode  information
+my_rename -v 's/_L00[1-9]//; s/_HGMLMAFXY_[ACGT-]+//' *.f*q.gz #  
+# calculate number of reads for each pair
+FQ_STATS=$(  find `pwd` -name "*.f*q.gz" | parallel --dry-run "printf '{/.}\t{=s/.+_(R[12]).fastq.gz/\1/=}\t%s\n' \$(( \$(pigz -cd {} | wc -l)/4 ))" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N read_stats )
+FQ_STATS_ID=$( echo $FQ_STATS | egrep -o "[0-9]{7}" )
+cp read_stats.o$FQ_STATS_ID ../${RUN}_raw_reads.tsv
+cd - 
+
+# process bams
 mkdir ind_bams
 
 # link all sam files in the same folder
@@ -732,7 +748,7 @@ find . -size 0 -exec rm {} +
 ```
 
 #### VCF filtering
-Variants were filtered using `r fontFmt("SnpSift")` v4.3.1 [@ruden_using_2012], based on their total loci depth, keeping ony SNP loci with at least 100 reads covering the locus (DP$\ge100$) and not more than 2000 (based on EDA). In addition, each isolate genotype call was removed (recoded as `./.`) if it had read depth <5.
+Variants were filtered using `r fontFmt("SnpSift")` v4.3.1 [@ruden_using_2012], based on their total loci depth, keeping ony SNP loci with at least 100 reads covering the locus (DP$\ge100$) and not more than 20000 (based on EDA). In addition, each isolate genotype call was removed (recoded as `./.`) if it had read depth <5.
 ```{bash vcf_filter}
 # Recode genotypes as missing if below a certain threshold, such as genotyping quality or depth (GQ:DP)  
 # filter only polymorphic SNPs, using QUAL>20, DP<36000/20000
@@ -746,9 +762,6 @@ SnpSift filter "( QUAL>$QUAL ) & ( TYPE='snp' ) & ( DP<$DP ) & ( countRef()>=1 &
 SnpSift vcf2tped -onlySnp A_rabiei_2018_isolates.tfam A_rabiei_2018_isolates_haplo.Qual20.U20kDP.poly.snps.vcf A_rabiei_2018_isolates # A_rabiei_on_me14_DP_filtered 
 ```
 
-
-Variants were called from the recalibrated alignment files using `r fontFmt("callvariants.sh")`, adjusted to call rare variants (MAF=0.02) and ignore the first and last 20 bp at the ends of the reads (as discussed in [SeqAnswers](http://seqanswers.com/forums/showpost.php?p=208194&postcount=235)).
-One process called variants for duplicate samples, to identify error rates that occur from the sequencing and different platforms. For the final VCF file, the sam files of duplicate samples were combined to increase coverage and standardise sample names (as isolates) and another `r fontFmt("callvariants.sh")` was performed.
 
 ### Variant Annotation
 Variants were then further filtered to keep only polymorphic and bi-allelic SNPs using the `r fontFmt("VariantAnnotation")` v`r packageVersion("VariantAnnotation")` and `r fontFmt("GenomicRanges")` v`r packageVersion("GenomicRanges")` R Bioconductor packages [@obenchain_variantannotation:_2014; @lawrence_software_2013]. The SNPs were annotated and position of each variant relative to gene locations was determined (coding/intron/promotor/intergenic), based on the reference genome and gene models of _A. rabiei_ strain _Me14_ (where the contig names were shortened to remove the `Arab_Me14` prefix). 
