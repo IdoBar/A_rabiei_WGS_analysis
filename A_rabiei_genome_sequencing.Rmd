@@ -381,7 +381,7 @@ A sub-sample of the raw reads from isolate FT15023 was matched against the NCBI 
 Both the initial QC and the mapping results show that there was a contamination in the DNA samples of at least three isolates: AGRF_05 (17CUR007), AGRF_08 (TR8102) and AGRF_18 (TR9573). This conclusion was obvious from the different GC content signatures of the three isolates (`r figs(name="GC_cont",display="cite")`) compared with the other isolates and from the mapping rates of these isolates to the _A. rabiei_ reference genome (see bottom of `r tbls(name="mapping_rates",display="cite")`).   
 A sub-sample of the raw reads from isolate TR9573 was matched against the NCBI nucleotide collection (nt) and identified the contamination as of bacterial origin (*Stenotrophomonas maltophilia*).  
 Since similar contamination levels were found in the same samples in both the AGRF and AgriVic batches, it's likely that it had originated from our lab.  
-To further investigate the origin of the contamination, the reads that didn't map to the _A. rabiei_ genmome will be clustered and deduplicated using `r fontFmt("clumpify.sh")` from the `r fontFmt("BBtools")` suite, as described in this [Biostars thread](https://www.biostars.org/p/277013/). The clustered reads will be used to construct "mini-assemblies" from the contaminated samples using `r fontFmt("Tadpole")` from the `r fontFmt("BBtools")` suite.  
+To further investigate the origin of the contamination, the reads that didn't map to the _A. rabiei_ genome will be clustered and deduplicated using `r fontFmt("clumpify.sh")` from the `r fontFmt("BBtools")` suite, as described in this [Biostars thread](https://www.biostars.org/p/277013/). The clustered reads will be used to construct "mini-assemblies" from the contaminated samples using `r fontFmt("Tadpole")` from the `r fontFmt("BBtools")` suite.  
 The assembled contigs will be BLASTed against the nr NCBI database, with species and kingdom annotation and the 20 most common organisms will be identified from each sample.
 
 Samples with less than 20% mapping and x15 coverage were removed from the rest of the analysis (see highlighted rows in `r tbls(name="mapping_rates",display="cite")`).  
@@ -482,28 +482,26 @@ cd !$
 GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
 NCORES=12
 
+# link all sam files in the same folder
+ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/AgriVic_BT2_process_05_04_2019/*.csorted.bam ./
+ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BT2_process_04_04_2019/*.csorted.bam ./
+ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/*.csorted.bam ./
 
-# remove lane information
-my_rename -v 's/_L00[1-9]//' *L00*.bam
 MERGE_JOB="merge_bams"
 mkdir -p $MERGE_JOB
 cd !$
-# link all sam files in the same folder
-ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/agvic_BB_process_22_02_2019/*.csorted.bam ./
-ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BB_process_22_02_2019/*.csorted.bam ./
-ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BB_process_22_02_2019/*.csorted.bam ./
 
 IGNORE_SAMS='11_S44|5B_S38|2_S34|11_S44|15CUR005|AGRF_18|AGRF_08|F15023|20_S53'
 # merge sam files of duplicated samples and rename to isolate name
- egrep -v $IGNORE_SAMS $HOME/scratch/data/A_rabiei_WGS/A_rabiei_isolate_list_for_wgs.txt | tail -n+2 | sort -k2 | gawk  -v ORS="" 'BEGIN{cmd="cd $PBS_O_WORKDIR; picard MergeSamFiles QUIET=true COMPRESSION_LEVEL=0 O=/dev/stdout"}NR==1{printf "%s I=%s_bbmap_me14.csorted.bam", cmd, $1; isolate=$2; next}isolate!=$2{printf " | picard AddOrReplaceReadGroups I=/dev/stdin ID=%s LB=%s PL=Illumina PU=combined SM=%s O=%s.csorted.bam\n%s I=%s_bbmap_me14.csorted.bam", isolate, isolate, isolate,  isolate, cmd, $1; isolate=$2; next}isolate==$2{printf " I=%s_bbmap_me14.csorted.bam", $1}END{printf " | picard AddOrReplaceReadGroups I=/dev/stdin ID=%s LB=%s PL=Illumina PU=mixed SM=%s O=%s.csorted.bam\n", isolate, isolate, isolate,  isolate}'  > $MERGE_JOB.cmds
+ egrep -v $IGNORE_SAMS $HOME/scratch/data/A_rabiei_WGS/A_rabiei_isolate_list_for_wgs.txt | tail -n+2 | sort -k2 | gawk  -v ORS="" 'BEGIN{cmd="cd $PBS_O_WORKDIR; picard MergeSamFiles USE_THREADING=true QUIET=true COMPRESSION_LEVEL=0 O=/dev/stdout"}NR==1{printf "%s I=../%s_BT2_me14.dedup.rg.csorted.bam", cmd, $1; isolate=$2; next}isolate!=$2{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin ID=%s LB=%s PL=Illumina PU=combined SM=%s O=%s.csorted.bam\n%s I=../%s_BT2_me14.dedup.rg.csorted.bam", isolate, isolate, isolate,  isolate, cmd, $1; isolate=$2; next}isolate==$2{printf " I=../%s_BT2_me14.dedup.rg.csorted.bam", $1}END{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin ID=%s LB=%s PL=Illumina PU=mixed SM=%s O=%s.csorted.bam\n", isolate, isolate, isolate,  isolate}'  > $MERGE_JOB.cmds
  
 # Prepare PBS script
 echo '#!'"/bin/bash -v
 #PBS -V
 #PBS -l select=1:ncpus=${NCORES}:mem=64GB,walltime=01:30:00
-"'
-cd $PBS_O_WORKDIR
-gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > $MERGE_JOB.pbspro
+
+cd \$PBS_O_WORKDIR
+gawk -v ARRAY_IND=\$PBS_ARRAY_INDEX 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > $MERGE_JOB.pbspro
 
 MERGE_JOB_ID=$( qsub -J1-$( wc -l $MERGE_JOB.cmds | gawk '{print $1}' ) -N $MERGE_JOB -vCMDS_FILE=$MERGE_JOB.cmds $MERGE_JOB.pbspro )
 # 5248653[].pbsserver
@@ -511,25 +509,27 @@ MERGE_JOB_ID=$( echo $MERGE_JOB_ID | egrep -o "[0-9]{7}")
 
 # check jobs completion
 grep "ExitStatus"  *.e$MERGE_JOB_ID*
-
+# remove links
+find . -type l -exec rm {} +
 cd - 
 
 # merge again to a single file
 BAMS=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -v ORS=" " '{print "I="$1}' )
-BAM_FILES=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -vORS=" " '1' )
-FINAL_MERGE=$( echo "cd $( pwd ) ; sambamba merge -t $ncpus all.csorted.combined.bam $BAM_FILES" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N Final_merge -W depend=afterok:$MERGE_JOB_ID[] ) # 5248672.pbsserver
+BAM_FILES=$(  egrep -v $IGNORE_SAMS $HOME/scratch/data/A_rabiei_WGS/A_rabiei_isolate_list_for_wgs.txt | tail -n+2 | sort -k2 | cut -f2,2 | uniq  | gawk -vORS=" " '{print "merge_bams/"$1".csorted.bam"}' )
+FINAL_MERGE=$( echo "cd $( pwd ) ; sambamba merge -t $NCORES -l 8 all.csorted.combined.bam $BAM_FILES " | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Final_merge -W depend=afterok:$MERGE_JOB_ID[]) 
+#FINAL_MERGE=$( echo "cd $( pwd ) ; picard MergeSamFiles USE_THREADING=true SO=coordinate $BAMS O=all.csorted.combined.bam" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Final_merge ) # 5248672.pbsserver
 FINAL_MERGE_ID=$( echo $FINAL_MERGE | egrep -o "[0-9]{7}")
 
 # save read groups to file
 sambamba view -H all.csorted.combined.bam | grep "^@RG" > all_read_groups.txt
 # BAM_FILES=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -vORS=" " '1' )
 # calculate coverage
-CALC_COV=$( echo "cd $( pwd ) ;  sambamba depth base --combined all.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fasta.fai 500 > targets.regions " | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N Calc_cov -W depend=afterok:$FINAL_MERGE_ID ) # 5248672.pbsserver
+CALC_COV=$( echo "cd $( pwd ) ;  sambamba depth base --combined all.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fasta.fai 500 > targets.regions " | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Calc_cov -W depend=afterok:$FINAL_MERGE_ID ) # 5248672.pbsserver
 CALC_COV_ID=$( echo $CALC_COV | egrep -o "[0-9]{7}")
 # /export/home/s2978925/.pyenv/versions/miniconda2-latest/bin/bamtools coverage -in
 # prepare Freebayes commands
 FB=freebayes_${DATE}
-FB_CMDS=$( echo "cd $( pwd ) ; cat targets.regions | parallel --dry-run -k \"freebayes -p $PLOIDY -f $GENOME.fasta all.csorted.combined.bam --region {}\" > $FB.cmds" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N FB_cmds -W depend=afterok:$CALC_COV_ID ) # 5248672.pbsserver
+FB_CMDS=$( echo "cd $( pwd ) ; cat targets.regions | parallel --dry-run -k \"freebayes -p $PLOIDY -f $GENOME.fasta all.csorted.combined.bam --region {}\" > $FB.cmds" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N FB_cmds -W depend=afterok:$CALC_COV_ID ) # 5248672.pbsserver
 # get job_id
 FB_CMDS_ID=$( echo $FB_CMDS | egrep -o "[0-9]{7}")
 
@@ -537,34 +537,35 @@ FB_CMDS_ID=$( echo $FB_CMDS | egrep -o "[0-9]{7}")
 # Prepare PBS script
 echo '#!'"/bin/bash -v
 #PBS -V
-#PBS -l select=1:ncpus=${ncpus}:mem=64GB,walltime=20:00:00
+#PBS -l select=1:ncpus=${NCORES}:mem=64GB,walltime=20:00:00
 "'
 cd $PBS_O_WORKDIR
 ARRAYID=$( echo $PBS_ARRAY_ID | egrep -o "[0-9]{7}" )
-gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR>=(${ncpus}*3*(ARRAY_IND-1)) && NR<=(ARRAY_IND*${ncpus}*3)' \${CMDS_FILE} | parallel -k -j ${ncpus} --joblog"' ${CMDS_FILE}.p$ARRAYID.$PBS_ARRAY_INDEX' > freebayes.pbspro
+gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR>(${NCORES}*3*(ARRAY_IND-1)) && NR<=(ARRAY_IND*${NCORES}*3)' \${CMDS_FILE} | parallel -k -j ${NCORES} --joblog"' ${CMDS_FILE}.p$ARRAYID.$PBS_ARRAY_INDEX' > freebayes.pbspro
 
 NCMDS=$( wc -l $FB.cmds | gawk '{print $1}')
-NJOBS=$(( NCMDS/ncpus/3 + 1  ))
+NJOBS=$(( NCMDS/NCORES/3 + 1  ))
 FB_JOB=$( qsub -J1-$NJOBS -N ${FB:0:11} -W depend=afterok:$FB_CMDS_ID -vCMDS_FILE=$FB.cmds freebayes.pbspro )
 # 5270639[1-4] completed successfully (the rest needed more processing time)
 FB_JOB_ID=$( echo $FB_JOB | egrep -o "[0-9]{7}")
 
-CONCAT_FB=$( echo "cd $( pwd ) ; cat *.o$FB_JOB_ID* | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_isolates_haplo.fb.vcf" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=10:00:00 -N FB_vcf -W depend=afterok:$FB_JOB_ID[] -m e -M i.bar@griffith.edu.au)
+CONCAT_FB=$( echo "cd $( pwd ) ; cat *.o$FB_JOB_ID* | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_isolates_haplo.fb.vcf" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=10:00:00 -N FB_vcf -W depend=afterok:$FB_JOB_ID[] -m e -M i.bar@griffith.edu.au)
 CONCAT_FB_ID=$( echo $CONCAT_FB | egrep -o "[0-9]{7}" )
 
-# check jobs completion
-grep "ExitStatus"  *.e* # | cat -d ":" -f2,2 | uniq
 # check for success/failure of FB commands
 tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==1' > $FB.failed.cmds
 tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==0' > $FB.successful.cmds
 
 # Produce vcf stats
 SAMPLES=$( cut -f6 all_read_groups.txt | gawk -F":" -vORS="," '{print $2}' | sed 's/,$//' )
-FB_STATS=$( echo "cd $( pwd ) ; mkdir ${FB}_stats; bcftools stats -F $GENOME.fasta -s $SAMPLES A_rabiei_2018_isolates_haplo.fb.vcf > ${FB}_stats/A_rabiei_2018_isolates_haplo.fb.vcf.stats; plot-vcfstats -p ${FB}_stats ${FB}_stats/A_rabiei_2018_isolates_haplo.fb.vcf.stats" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=10:00:00 -N FB_vcfstats -W depend=afterok:$CONCAT_FB_ID -m e -M i.bar@griffith.edu.au)
+FB_STATS=$( echo "cd $( pwd ) ; mkdir ${FB}_stats; bcftools stats -F $GENOME.fasta -s $SAMPLES A_rabiei_2018_isolates_haplo.fb.vcf > ${FB}_stats/A_rabiei_2018_isolates_haplo.fb.vcf.stats; plot-vcfstats -p ${FB}_stats ${FB}_stats/A_rabiei_2018_isolates_haplo.fb.vcf.stats" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=10:00:00 -N FB_vcfstats -W depend=afterok:$CONCAT_FB_ID -m e -M i.bar@griffith.edu.au)
 FB_STATS_ID=$( echo $FB_STATS | egrep -o "[0-9]{7}" )
 
 # find and remove empty files
 find . -size 0 -exec rm {} +
+
+# check jobs completion
+find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus"
 
 ```
 
@@ -573,12 +574,12 @@ It is advised to process each sample separately as well to be able to estimate e
 ```{bash FB_var_call_ind}
 PLOIDY=1
 DATE=`date +%d_%m_%Y`
-RUN=FB_vars_${DATE} # day of run was 02_02_2019
+RUN=FB_vars_ind_${DATE} # day of run was 02_02_2019
 mkdir -p $HOME/scratch/data/A_rabiei_WGS/${RUN}
 cd !$
 # JOB_NAME="BBmap_me14_vars"
 GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
-ncpus=12
+NCORES=12
 
 # get number of reads from all input files
 mkdir raw_fq
@@ -586,10 +587,10 @@ cd !$
 ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/*.f*q.gz ./
 ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BB_process_22_02_2019/AGRF_*R?.f*q.gz ./
 ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/*.f*q.gz ./
-# remove flowcell and barcode  information
+# remove flowcell and barcode information
 my_rename -v 's/_L00[1-9]//; s/_HGMLMAFXY_[ACGT-]+//' *.f*q.gz #  
 # calculate number of reads for each pair
-FQ_STATS=$(  find `pwd` -name "*.f*q.gz" | parallel --dry-run "printf '{/.}\t{=s/.+_(R[12]).fastq.gz/\1/=}\t%s\n' \$(( \$(pigz -cd {} | wc -l)/4 ))" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N read_stats )
+FQ_STATS=$(  find `pwd` -name "*.f*q.gz" | parallel --dry-run "printf '{/.}\t{=s/.+_(R[12]).fastq.gz/\1/=}\t%s\n' \$(( \$(pigz -cd {} | wc -l)/4 ))" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N read_stats )
 FQ_STATS_ID=$( echo $FQ_STATS | egrep -o "[0-9]{7}" )
 cp read_stats.o$FQ_STATS_ID ../${RUN}_raw_reads.tsv
 cd - 
@@ -598,9 +599,9 @@ cd -
 mkdir ind_bams
 
 # link all sam files in the same folder
-ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/agvic_BB_process_22_02_2019/*.csorted.bam ./ind_bams/
-ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BB_process_22_02_2019/*.csorted.bam ./ind_bams/
-ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BB_process_22_02_2019/*.csorted.bam ./ind_bams/
+ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/AgriVic_BT2_process_05_04_2019/*.csorted.bam ./ind_bams/
+ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BT2_process_04_04_2019/*.csorted.bam ./ind_bams/
+ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/*.csorted.bam ./ind_bams/
 # remove lane information
 my_rename -v 's/_L00[1-9]//' *L00*.bam
 MERGE_JOB="merge_bams"
@@ -610,20 +611,19 @@ IGNORE_SAMS='11_S44|5B_S38|2_S34|11_S44|15CUR005|AGRF_18|AGRF_08|F15023|20_S53'
 # merge ind files to a single bam file (keep submission ids)
 # BAMS=$( ls -1 $MERGE_JOB/*.csorted.bam | egrep -v $IGNORE_SAMS| gawk -v ORS=" " '{print "I="$1}' )
 BAM_FILES=$( ls -1 ind_bams/*.csorted.bam | egrep -v $IGNORE_SAMS | gawk -vORS=" " '1' )
-FINAL_MERGE=$( echo "cd $( pwd ) ; sambamba merge -t $ncpus all_ind.csorted.combined.bam $BAM_FILES" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N Final_merge ) # 5248672.pbsserver
+FINAL_MERGE=$( echo "cd $( pwd ) ; sambamba merge -t $NCORES all_ind.csorted.combined.bam $BAM_FILES" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Final_merge ) # 5248672.pbsserver
 FINAL_MERGE_ID=$( echo $FINAL_MERGE | egrep -o "[0-9]{7}")
 
-# save read groups to file
-sambamba view -H all_ind.csorted.combined.bam | grep "^@RG" > ind_read_groups.txt
+
 # BAM_FILES=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -vORS=" " '1' )
 
 # calculate coverage
-CALC_COV=$( echo "cd $( pwd ) ;  sambamba depth base --combined all_ind.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fasta.fai 500 > targets.regions " | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N Calc_cov -W depend=afterok:$FINAL_MERGE_ID ) # 5248672.pbsserver
+CALC_COV=$( echo "cd $( pwd ) ;  sambamba depth base --combined all_ind.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fasta.fai 500 > targets.regions " | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Calc_cov -W depend=afterok:$FINAL_MERGE_ID ) # 5248672.pbsserver
 CALC_COV_ID=$( echo $CALC_COV | egrep -o "[0-9]{7}")
 # /export/home/s2978925/.pyenv/versions/miniconda2-latest/bin/bamtools coverage -in
 # prepare Freebayes commands
 FB=freebayes_${DATE}
-FB_CMDS=$( echo "cd $( pwd ) ; cat targets.regions | parallel --dry-run -k \"freebayes -p $PLOIDY -f $GENOME.fasta all_ind.csorted.combined.bam --region {}\" > $FB.cmds" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=5:00:00 -N FB_cmds -W depend=afterok:$CALC_COV_ID ) # 5248672.pbsserver
+FB_CMDS=$( echo "cd $( pwd ) ; cat targets.regions | parallel --dry-run -k \"freebayes -p $PLOIDY -f $GENOME.fasta all_ind.csorted.combined.bam --region {}\" > $FB.cmds" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N FB_cmds -W depend=afterok:$CALC_COV_ID ) # 5248672.pbsserver
 # get job_id
 FB_CMDS_ID=$( echo $FB_CMDS | egrep -o "[0-9]{7}")
 
@@ -631,29 +631,33 @@ FB_CMDS_ID=$( echo $FB_CMDS | egrep -o "[0-9]{7}")
 # Prepare PBS script
 echo '#!'"/bin/bash -v
 #PBS -V
-#PBS -l select=1:ncpus=${ncpus}:mem=64GB,walltime=20:00:00
+#PBS -l select=1:ncpus=${NCORES}:mem=64GB,walltime=20:00:00
 "'
 cd $PBS_O_WORKDIR
 ARRAYID=$( echo $PBS_ARRAY_ID | egrep -o "[0-9]{7}" )
-gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR>=(${ncpus}*3*(ARRAY_IND-1)) && NR<=(ARRAY_IND*${ncpus}*3)' \${CMDS_FILE} | parallel -k -j ${ncpus} --joblog"' ${CMDS_FILE}.p$ARRAYID.$PBS_ARRAY_INDEX' > freebayes.pbspro
+gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR>=(${NCORES}*3*(ARRAY_IND-1)) && NR<=(ARRAY_IND*${NCORES}*3)' \${CMDS_FILE} | parallel -k -j ${NCORES} --joblog"' ${CMDS_FILE}.p$ARRAYID.$PBS_ARRAY_INDEX' > freebayes.pbspro
 
 # check jobs completion
-grep "ExitStatus"  *.e* | cat -d ":" -f2,2 | uniq
+find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus"
+
+# save read groups to file
+
 
 # After successful creation of the jobs
 NCMDS=$( wc -l $FB.cmds | gawk '{print $1}')
-NJOBS=$(( NCMDS/ncpus/3 + 1  ))
+NJOBS=$(( NCMDS/NCORES/3 + 1  ))
 FB_JOB=$( qsub -J1-$NJOBS -N ${FB:0:11}  -vCMDS_FILE=$FB.cmds freebayes.pbspro ) # 5270639[1-4] completed successfully (the rest needed more processing time)
 FB_JOB_ID=$( echo $FB_JOB | egrep -o "[0-9]{7}")
 
-CONCAT_FB=$( echo "cd $( pwd ) ; cat *.o$FB_JOB_ID* | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_isolates_haplo.ind.fb.vcf" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=10:00:00 -N FB_vcf -W depend=afterok:$FB_JOB_ID[] -m e -M i.bar@griffith.edu.au)
+CONCAT_FB=$( echo "cd $( pwd ) ; cat *.o$FB_JOB_ID* | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_isolates_haplo_ind.bt2.fb.vcf; sambamba view -H all_ind.csorted.combined.bam | grep '^@RG' > ind_read_groups.txt" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=10:00:00 -N FB_vcf -W depend=afterok:$FB_JOB_ID[] -m e -M i.bar@griffith.edu.au)
 CONCAT_FB_ID=$( echo $CONCAT_FB | egrep -o "[0-9]{7}" )
 
 # find and remove empty files
 find . -size 0 -exec rm {} +
 
 # check jobs completion
-grep "ExitStatus"  *.e* # | cat -d ":" -f2,2 | uniq
+find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus"
+
 # check for success/failure of FB commands
 tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==1' > $FB.failed.cmds
 tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==0' > $FB.successful.cmds
@@ -661,7 +665,7 @@ rm $FB.cmds.p*.*
 
 # Produce vcf stats
 SAMPLES=$( cut -f6 ind_read_groups.txt | gawk -F":" -vORS="," '{print $2}' | sed 's/,$//' )
-FB_STATS=$( echo "cd $( pwd ) ; mkdir ${FB}_stats; bcftools stats -F $GENOME.fasta -s $SAMPLES A_rabiei_2018_isolates_haplo.ind.fb.vcf > ${FB}_stats/A_rabiei_2018_isolates_haplo.ind.fb.vcf.stats; plot-vcfstats -p ${FB}_stats ${FB}_stats/A_rabiei_2018_isolates_haplo.ind.fb.vcf.stats" | qsub -V -l select=1:ncpus=${ncpus}:mem=96GB,walltime=10:00:00 -N FB_vcfstats -W depend=afterok:$CONCAT_FB_ID -m e -M i.bar@griffith.edu.au)
+FB_STATS=$( echo "cd $( pwd ) ; mkdir ${FB}_stats; bcftools stats -F $GENOME.fasta -s $SAMPLES A_rabiei_2018_isolates_haplo_ind.bt2.fb.vcf > ${FB}_stats/A_rabiei_2018_isolates_haplo_ind.bt2.fb.vcf.stats; plot-vcfstats -p ${FB}_stats ${FB}_stats/A_rabiei_2018_isolates_haplo_ind.bt2.fb.vcf.stats" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=10:00:00 -N FB_vcfstats -W depend=afterok:$CONCAT_FB_ID -m e -M i.bar@griffith.edu.au)
 FB_STATS_ID=$( echo $FB_STATS | egrep -o "[0-9]{7}" )
 
 # find and remove empty files
@@ -674,11 +678,13 @@ Variants were filtered using `r fontFmt("SnpSift")` v4.3.1 [@ruden_using_2012], 
 ```{bash vcf_filter}
 # Recode genotypes as missing if below a certain threshold, such as genotyping quality or depth (GQ:DP)  
 # filter only polymorphic SNPs, using QUAL>20, DP<36000/20000
-QUAL=20
-DP=20000
-SnpSift filter "( QUAL>$QUAL ) & ( TYPE='snp' ) & ( DP<$DP ) & ( countRef()>=1 & countVariant()>=1 )" A_rabiei_2018_isolates_haplo.ind.fb.vcf > A_rabiei_2018_isolates_haplo.ind.Qual${QUAL}.U${DP}DP.poly.snps.vcf
-
-SnpSift filter "( QUAL>$QUAL ) & ( TYPE='snp' ) & ( DP<$DP ) & ( countRef()>=1 & countVariant()>=1 )" A_rabiei_2018_isolates_haplo.fb.vcf > A_rabiei_2018_isolates_haplo.Qual${QUAL}.U${DP}DP.poly.snps.vcf
+QUAL=10
+MAX_DP=20000
+MIN_DP=50
+# filter individual vcf
+SnpSift filter "( QUAL>$QUAL ) & ( TYPE='snp' ) & ( DP<$MAX_DP ) & ( DP>$MIN_DP ) & ( countRef()>=1 & countVariant()>=1 )" A_rabiei_2018_isolates_haplo_ind.bt2.fb.vcf | SnpSift gtfilter -gv './.' "( DP<5 )" > A_rabiei_2018_isolates_haplo_ind.bt2.fb.Qual${QUAL}.U${DP}DP.poly.snps.vcf
+# filter combined BAM vcf
+SnpSift filter "( QUAL>$QUAL ) & ( TYPE='snp' ) & ( DP<$DP ) & ( DP>$MIN_DP )& ( countRef()>=1 & countVariant()>=1 )" A_rabiei_2018_isolates_haplo.fb.vcf | SnpSift gtfilter -gv './.' "( DP<5 )" > A_rabiei_2018_isolates_haplo.Qual${QUAL}.U${DP}DP.poly.snps.vcf
 
 # make tfam file
 SnpSift vcf2tped -onlySnp A_rabiei_2018_isolates.tfam A_rabiei_2018_isolates_haplo.Qual20.U20kDP.poly.snps.vcf A_rabiei_2018_isolates # A_rabiei_on_me14_DP_filtered 

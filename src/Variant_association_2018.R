@@ -18,7 +18,7 @@ pacman::p_load(char=CRAN_packages)
 
 #### Read data files ####
 # Read sample metadata and save to file
-analysis_basename="A_rabiei_2018"
+analysis_basename="A_rabiei_2019"
 variant_method <- "haplo.fb"
 analysis_folder <- "../FB_vars_01_03_2019"
 analysis_outdir <- glue("./output/{variant_method}/")

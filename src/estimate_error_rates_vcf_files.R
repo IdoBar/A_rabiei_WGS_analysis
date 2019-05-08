@@ -64,7 +64,7 @@ estimate_error_rates <- function(vcf_input, grouping_suffix){
     locus_error_rate <- sum(marker_errors$missing_locus)/nrow(marker_errors)
     allele_error_rate <- sum(marker_errors$allele_mismatch)/(nrow(marker_errors)-sum(marker_errors$dropped_locus))
 
-    error_rates_df <- tibble("vcf_file"=vcf_input, "replicate_group"=r,
+    error_rates_df <- tibble("vcf_file"=vcf_input, "replicate_group"=r, "replicate_num"=nrow(replicates),
                                  "locus_error_rate"=locus_error_rate,
                                  "allele_error_rate"=allele_error_rate) %>%
       bind_rows(error_rates_df, .)
