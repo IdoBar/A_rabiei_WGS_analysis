@@ -37,7 +37,9 @@ error_rates_sum <- error_rates %>% arrange(replicate_group) %>% mutate(analysis=
   dplyr::select(analysis, replicate_group, allele_error_rate) %>% 
   # group_by(replicate_group) %>% 
   spread(key=analysis, value = allele_error_rate) %>% 
-  mutate(allele_error_rate_diff=FB_vars_BBtools_01_03_2019-FB_vars_BT2_07_04_2019)
-openxlsx::write.xlsx(error_rates_sum, file = "output/results/pipeline_comparison.xlsx", asTable = TRUE)
+  mutate(allele_error_rate_diff=FB_vars_BBtools_01_03_2019-FB_vars_BT2_07_04_2019) # %>% 
+ 
+openxlsx::write.xlsx(error_rates_sum, file = "output/results/pipeline_comparison_test.xlsx", asTable = TRUE)
+
 mean(error_rates_sum$allele_error_rate_diff)
 mean(error_rates_sum$FB_vars_07_04_2019)
