@@ -119,7 +119,7 @@ easy_install -U pdfx
 ```
 
 ### Mapping to the reference genome (using BBmap)
-NextSeq quality scores are known to be inaccurate (due to binnig and using just 2 colour system, see [SEQanswers discussion](http://seqanswers.com/forums/showpost.php?p=172507&postcount=120)), so it's advised to recalibrate them before any quality trimming. The reads were therefore combined, trimmed to remove sequencing adaptors only (not based on quality) with `r fontFmt("bbduk.sh")` and then mapped to the reference genome (with `r fontFmt("bbmap.sh")`) to calculate quality recalibration matrices (with `r fontFmt("calctruequality.sh")`). Each read pair (R1 and R2) were then further filtered (with `r fontFmt("filterbytile.sh")`), deduped (with `r fontFmt("clumpify.sh")`), quality-recalibrated and trimmed (with `r fontFmt("bbduk.sh")`) and mapped to the _A. rabiei_ reference genome, strain _Me14_ (Rob Lee, Curtin University), using `r fontFmt("bbmap.sh")` with the `k=12` option in `slow` mode for high sensitivity, in preparation for variant calling (see this [discussion](http://seqanswers.com/forums/showpost.php?p=208146&postcount=233)). The entire pipeline was performed using the specified tools from `r fontFmt("BBtools")` (v38.22; @bushnell_bbmap:_2014). See official download page on [SourceForge](https://sourceforge.net/projects/bbmap/), [user guide](http://jgi.doe.gov/data-and-tools/bbtools/bb-tools-user-guide/bbduk-guide/) and [SEQanswers thread](http://seqanswers.com/forums/showthread.php?t=42776).  
+NextSeq quality scores are known to be inaccurate (due to binnig and using just 2 colour system, see [SEQanswers discussion](http://seqanswers.com/forums/showpost.php?p=172507&postcount=120)), so it's advised to recalibrate them before any quality trimming. The reads were therefore combined, trimmed to remove sequencing adaptors only (not based on quality) with `r fontFmt("bbduk.sh")` and then mapped to the reference genome (with `r fontFmt("bbmap.sh")`) to calculate quality recalibration matrices (with `r fontFmt("calctruequality.sh")`). Each read pair (R1 and R2) were then further filtered (with `r fontFmt("filterbytile.sh")`), deduped (with `r fontFmt("clumpify.sh")`), quality-recalibrated and trimmed (with `r fontFmt("bbduk.sh")`) and mapped to the _A. rabiei_ reference genome, strain _Me14_ ([GCA_004011695.1](https://www.ncbi.nlm.nih.gov/assembly/GCA_004011695.1), Curtin University), using `r fontFmt("bbmap.sh")` with the `k=12` option in `slow` mode for high sensitivity, in preparation for variant calling (see this [discussion](http://seqanswers.com/forums/showpost.php?p=208146&postcount=233)). The entire pipeline was performed using the specified tools from `r fontFmt("BBtools")` (v38.22; @bushnell_bbmap:_2014). See official download page on [SourceForge](https://sourceforge.net/projects/bbmap/), [user guide](http://jgi.doe.gov/data-and-tools/bbtools/bb-tools-user-guide/bbduk-guide/) and [SEQanswers thread](http://seqanswers.com/forums/showthread.php?t=42776).  
 Raw files quality after adaptor trimming was assessed with `r fontFmt("FastQC")` (v0.11.8). The aligned SAM files were sorted and compressed to BAM format with [Picard v2.18.22](https://broadinstitute.github.io/picard/). Post-trimming and mapping statistics were consolidated into a single, interactive report for each batch using `r fontFmt("MultiQC")` v0.9.1 [@ewels_multiqc:_2016]
 
 #### Macrogen batch
@@ -471,7 +471,7 @@ _To process mapping summary table, copy the `bbmap.stats` and `qualimap.html` fi
 
 
 ```{r mapping_table, eval=TRUE, echo=FALSE}
-analysis_folder <- "../BB_vars_26_02_2019"
+analysis_folder <- "var_data/BB_vars_26_02_2019"
 analysis_basename <- "A_rabiei_2018"
 variant_method <- "haplo.fb"
 # analysis_folder <- "../FB_vars_01_03_2019"
@@ -768,8 +768,7 @@ $HPC_GRID_RUNNER_DIR/BioIfx/hpc_FASTA_GridRunner.pl --cmd_template "cd $PBS_O_WO
 Look for particular effector genes and genes associated with plant-pathogen interactions and pathogenicity genes. Look in the literature and create a list of target genes.
 
 ### Variant-Pathogenicity association
-Association between variants and pathogenicity levels was identified by `r fontFmt("SNPassoc")` v`r packageVersion("SNPassoc")` R package [@gonzalez_snpassoc:_2007], using a codominant gene model and a significance threshold of _p_-value $\le0.005$.  
-
+Association between variants and pathogenicity levels was identified by `r fontFmt("SNPassoc")` R package [@gonzalez_snpassoc:_2007], using a codominant gene model and a significance threshold of _p_-value $\le0.005$.  
 
 
 ## Alternative analyses
