@@ -3,5 +3,5 @@
 .RData
 .Ruserdata
 output/
-raw_data/
+var_data/
 *~*

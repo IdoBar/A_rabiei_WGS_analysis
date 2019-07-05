@@ -1,0 +1,476 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<link rel="stylesheet" href="css/agogo.css" type="text/css" />
+		<link rel="stylesheet" href="css/report.css" type="text/css" />
+	<title>Qualimap report: Multi-sample BAM QC</title>
+
+	</head>
+<body>
+	<div class="header-wrapper">
+		<div class="header">
+		<p class="logo"><a href="http://qualimap.bioinfo.cipf.es/">
+		<img class="logo" src="css/qualimap_logo_small.png" alt="Logo"/>
+		</a></p>
+<div class="headertitle"><a href="">Qualimap Report: Multi-sample BAM QC</a></div>
+	</div>
+</div>
+
+<div class="content-wrapper">
+<div class="content">
+<div class="document">
+<div class="documentwrapper">
+<div class="bodywrapper">
+<div class="body">
+<div class=section>
+<h2>Input data and parameters<a class="headerlink" name="input" title="Permalink to this headline">&nbsp;</a></h2>
+<div class=summary>
+
+
+<div class=table-summary>
+<h3>Samples</h3>
+<table class="summary hovertable">
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_11</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_11_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_10</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_10_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_02</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_02_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_13</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_13_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_01</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_01_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_12</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_12_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_04</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_04_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_15</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_15_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_03</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_03_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_14</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_14_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_06</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_06_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_17</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_17_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_05</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_05_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_16</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_16_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_08</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_08_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_07</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_07_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_18</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_18_bbmap_me14_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>AGRF_09</td>
+<td class=column2>/scratch/s2978925/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/BB_process_02_02_2019/merged_bams/AGRF_09_bbmap_me14_stats</td>
+</tr>
+</table>
+</div>
+
+</div>
+</div> <!-- summary section -->
+
+<div class=section>
+<h2>Summary<a class="headerlink" name="summary" title="Permalink to this headline">&nbsp;</a></h2>
+<div class=summary>
+
+
+<div class=table-summary>
+<h3>Globals</h3>
+<table class="summary hovertable">
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Number of samples</td>
+<td class=column2>18</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Total number of mapped reads</td>
+<td class=column2>218,583,062</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Mean samples coverage</td>
+<td class=column2>43.93</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Mean samples GC-content</td>
+<td class=column2>46.68</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Mean samples mapping quality</td>
+<td class=column2>41.47</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Mean samples insert size</td>
+<td class=column2>276.44</td>
+</tr>
+</table>
+</div>
+
+
+<div class=table-summary>
+<h3>Sample statistics</h3>
+<table class="summary hovertable">
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td><b>Sample name</b></td>
+<td><b>Coverage mean</b></td>
+<td><b>Coverage std</b></td>
+<td><b>GC percentage</b></td>
+<td><b>Mapping quality mean</b></td>
+<td><b>Insert size median</b></td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_01</td>
+<td>52.6817</td>
+<td>61.2383</td>
+<td>47.06</td>
+<td>41.6524</td>
+<td>274.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_02</td>
+<td>45.3928</td>
+<td>53.6667</td>
+<td>47.33</td>
+<td>41.5006</td>
+<td>281.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_03</td>
+<td>53.9705</td>
+<td>66.6949</td>
+<td>46.71</td>
+<td>41.4461</td>
+<td>279.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_04</td>
+<td>57.3777</td>
+<td>62.1682</td>
+<td>46.88</td>
+<td>41.4676</td>
+<td>293.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_05</td>
+<td>10.7045</td>
+<td>9.1217</td>
+<td>46.04</td>
+<td>41.1271</td>
+<td>256.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_06</td>
+<td>56.9956</td>
+<td>53.4327</td>
+<td>47.77</td>
+<td>41.8262</td>
+<td>241.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_07</td>
+<td>60.2082</td>
+<td>55.0333</td>
+<td>48.53</td>
+<td>41.777</td>
+<td>256.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_08</td>
+<td>9.9444</td>
+<td>9.4033</td>
+<td>46.0</td>
+<td>41.0437</td>
+<td>229.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_09</td>
+<td>64.82</td>
+<td>60.8495</td>
+<td>47.31</td>
+<td>41.488</td>
+<td>274.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_10</td>
+<td>58.2953</td>
+<td>55.151</td>
+<td>47.25</td>
+<td>41.463</td>
+<td>282.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_11</td>
+<td>65.6917</td>
+<td>75.1685</td>
+<td>45.47</td>
+<td>41.4866</td>
+<td>293.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_12</td>
+<td>42.3196</td>
+<td>43.2324</td>
+<td>45.13</td>
+<td>41.4178</td>
+<td>310.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_13</td>
+<td>58.7976</td>
+<td>54.0656</td>
+<td>46.3</td>
+<td>41.4936</td>
+<td>289.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_14</td>
+<td>30.4071</td>
+<td>32.0756</td>
+<td>46.58</td>
+<td>41.5219</td>
+<td>286.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_15</td>
+<td>52.9879</td>
+<td>46.3489</td>
+<td>46.12</td>
+<td>41.5544</td>
+<td>300.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_16</td>
+<td>38.1523</td>
+<td>44.7935</td>
+<td>46.8</td>
+<td>41.4658</td>
+<td>274.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_17</td>
+<td>29.0653</td>
+<td>26.3377</td>
+<td>46.23</td>
+<td>41.4738</td>
+<td>292.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>AGRF_18</td>
+<td>2.9793</td>
+<td>3.5532</td>
+<td>46.68</td>
+<td>41.2344</td>
+<td>267.0</td>
+</tr>
+</table>
+</div>
+
+</div>
+</div> <!-- summary section -->
+
+
+
+<div class=section>
+
+<h2>PCA<a class="headerlink" name="PCA" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/PCA.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Coverage Across Reference<a class="headerlink" name="Coverage across reference" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Coverage across reference.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Coverage Histogram (0 - 6798X)<a class="headerlink" name="Coverage Histogram (0 - 6798X)" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Coverage Histogram (0 - 6798X).png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Global Coverage Histogram<a class="headerlink" name="Global Coverage Histogram" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Global Coverage Histogram.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Genome Fraction Coverage<a class="headerlink" name="Genome Fraction Coverage" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Genome Fraction Coverage.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Duplication Rate Histogram<a class="headerlink" name="Duplication Rate Histogram" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Duplication Rate Histogram.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Mapped reads GC-content<a class="headerlink" name="Mapped reads GC-content" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Mapped reads GC-content.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Mapped Reads Clipping Profile<a class="headerlink" name="Mapped Reads Clipping Profile" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Mapped Reads Clipping Profile.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Mapped Reads GC-content Distribution<a class="headerlink" name="Mapped Reads GC-content Distribution" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Mapped Reads GC-content Distribution.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Mapping Quality Across Reference<a class="headerlink" name="Mapping Quality Across Reference" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Mapping Quality Across Reference.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Mapping Quality Histogram<a class="headerlink" name="Mapping Quality Histogram" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Mapping Quality Histogram.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Insert Size Across Reference<a class="headerlink" name="Insert Size Across Reference" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Insert Size Across Reference.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Insert Size Histogram<a class="headerlink" name="Insert Size Histogram" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Insert Size Histogram.png"></div>
+
+</div><!-- graph section -->
+
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+<div class="sidebar">
+<h3>Contents</h3>
+<li class="toctree-l1"><a class="reference internal" href="#input">Input data & parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#summary">Summary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#PCA">PCA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Coverage across reference">Coverage Across Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Coverage Histogram (0 - 6798X)">Coverage Histogram (0 - 6798X)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Global Coverage Histogram">Global Coverage Histogram</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Genome Fraction Coverage">Genome Fraction Coverage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Duplication Rate Histogram">Duplication Rate Histogram</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Mapped reads GC-content">Mapped reads GC-content</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Mapped Reads Clipping Profile">Mapped Reads Clipping Profile</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Mapped Reads GC-content Distribution">Mapped Reads GC-content Distribution</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Mapping Quality Across Reference">Mapping Quality Across Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Mapping Quality Histogram">Mapping Quality Histogram</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Insert Size Across Reference">Insert Size Across Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Insert Size Histogram">Insert Size Histogram</a></li>
+</div> <!-- sidebar -->
+
+<div class="clearer"></div>
+</div>
+
+</div>
+
+
+<div class="footer-wrapper">
+<div class="footer">
+<div class="left">
+<div class="footer">
+2019/02/03 02:12:29
+</div>
+</div>
+<div class="right">
+<div class="footer">
+Generated by QualiMap v.2.2.2-dev
+</div
+</div>
+<div class="clearer"></div>
+</div> <!-- footer -->
+</div>
+</body>
