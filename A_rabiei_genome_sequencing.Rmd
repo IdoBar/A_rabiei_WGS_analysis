@@ -111,7 +111,7 @@ Install needed software in a `conda` environment on Gowonda2.
 ```{bash setup_tools}
 # install sambamba (need to fix internet connection to gowonda2 - use patched netcheck in ~/bin)
 ~/bin/netcheck
-conda install -c bioconda sambamba htslib samtools bcftools snpsift snpeff multiqc fastqc dnapi igvtools qualimap bbmap gatk picard bowtie2 samblaster freebayes
+conda install -c bioconda sambamba htslib samtools bcftools snpsift snpeff multiqc fastqc dnapi igvtools qualimap bbmap gatk picard bowtie2 samblaster freebayes jellyfish bbmap
 conda install -c biobuilds igv
 # Clean extra space
 conda clean -y --all
@@ -463,6 +463,66 @@ datatable(as.data.frame(qualimap_results %>% mutate_if(is.numeric, ~round(., 2))
 include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
 ```
 
+#### Assess genome size and ploidy
+The sequencing data of 2 isolates with sufficient coverage and no contamination (Macrogen batch DON001, AgriVic batch 7_S40) were analyzed for their k-mer content (coverage and distribution) to estimate the genome size and ploidy of the genome.
+k-mer counting and genome ploidy and size estimation were performed with `kmercountexact.sh` (from BBMap v38.34, see [SeqAnsewes thread](http://seqanswers.com/forums/showthread.php?t=64086)).  
+Similar analysis can be performed by Jellyfish (see [tutorial](http://koke.asrc.kanazawa-u.ac.jp/HOWTO/kmer-genomesize.html))
+```{bash kmer_analysis}
+
+DATE=`date +%d_%m_%Y`
+RUN=kmer_analysis_${DATE} # day of run was 02_02_2019
+PLOIDY=1
+mkdir ${RUN}
+cd !$
+
+# Prepare PBS script
+echo '#!/bin/bash -x
+#PBS -V
+#PBS -l select=1:ncpus=12:mem=48GB,walltime=01:30:00
+
+cd $PBS_O_WORKDIR
+gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > ${RUN}.pbspro
+
+# macrogen sample
+SAMPLE=DON001
+# agrivic sample
+SAMPLE=7_S40
+ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/AgriVic_BT2_process_05_04_2019/trimmed_${SAMPLE}*.fastq.gz ./
+# Run on parallel nodes (faster and preferred)
+# AGRF batch
+
+SAMPLE=AGRF_11
+ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BT2_process_04_04_2019/trimmed_${SAMPLE}*.fastq.gz ./
+# run BB kmercount
+SAMPLES=(DON001 7_S40 AGRF_11)
+for SAMPLE in "${SAMPLES[@]}"; do
+  seq 21 2 37 | parallel --dry-run kmercountexact.sh k={} in=trimmed_${SAMPLE}_R1.fastq.gz in2=trimmed_${SAMPLE}_R2.fastq.gz khist=${SAMPLE}_khist_k{}.txt peaks=${SAMPLE}_peaks_k{}.txt > ${SAMPLE}_${RUN}.bash
+  # Run the commands 
+  JOB_NAME=bb_kmer
+  JOBS_NUM=$( wc -l ${SAMPLE}_${RUN}.bash | gawk '{print $1}' )
+  qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${SAMPLE}_${RUN}.bash ${RUN}.pbspro # 5374038[].pbsserver
+done
+
+# find and remove empty files
+find . -size 0 -exec rm {} + 
+rm *.tmp
+
+# Check that all jobs finished successfuly
+find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus" #  *m.e$JOB_ID.*
+
+# aggregate data from all output files (and transpose)
+cat ${SAMPLE}_peaks_k21.txt | grep "^#" | head -n -1 | sed "s/#//" | cat <( printf "sample\t%s\n" $SAMPLE) - | cut -f1 | paste -s > kmer_peaks_summary.txt
+
+SAMPLES=(DON001 7_S40 AGRF_11)
+for SAMPLE in "${SAMPLES[@]}"; do 
+  ls -1 ${SAMPLE}_khist*.txt | parallel "tail -n +2 {} | gawk -v sample=$SAMPLE '{printf "%s\t$0", sample}'" >> kmer_peaks_summary.txt
+done
+# do the same for the hist data (maybe with gawk)
+ gawk 'NR==1{printf "sample\tkmer\t%s\n", $0}' ${SAMPLE}_khist_k21.txt >  khist_summary.txt
+ parallel "tail -n +2 {1}_khist_k{2}.txt | gawk '{print \"{1}\t{2}\t\"\$0}'" ::: ${SAMPLES[@]} ::: $(seq 21 2 37) >> khist_summary.txt
+
+# Done!
+```
 
 ### Variant Call
 #### Using FreeBayes
