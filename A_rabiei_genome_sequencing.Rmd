@@ -111,7 +111,7 @@ Install needed software in a `conda` environment on Gowonda2.
 ```{bash setup_tools}
 # install sambamba (need to fix internet connection to gowonda2 - use patched netcheck in ~/bin)
 ~/bin/netcheck
-conda install -c bioconda sambamba htslib samtools bcftools snpsift snpeff multiqc fastqc dnapi igvtools qualimap bbmap gatk picard bowtie2 samblaster freebayes
+conda install -c bioconda sambamba htslib samtools bcftools snpsift snpeff multiqc fastqc dnapi igvtools qualimap bbmap gatk picard bowtie2 samblaster freebayes jellyfish bbmap
 conda install -c biobuilds igv
 # Clean extra space
 conda clean -y --all
@@ -463,6 +463,43 @@ datatable(as.data.frame(qualimap_results %>% mutate_if(is.numeric, ~round(., 2))
 include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
 ```
 
+#### Assess genome size and ploidy
+The sequencing data of 2 isolates with sufficient coverage and no contamination (Macrogen batch DON001, AgriVic batch 7_S40) were analyzed for their k-mer content (coverage and distribution) to estimate the genome size and ploidy of the genome.
+k-mer counting and genome ploidy and size estimation were performed with `kmercountexact.sh` (from BBMap v38.34, see [SeqAnsewes thread](http://seqanswers.com/forums/showthread.php?t=64086)).  
+Similar analysis can be performed by Jellyfish (see [tutorial](http://koke.asrc.kanazawa-u.ac.jp/HOWTO/kmer-genomesize.html))
+```{bash kmer_analysis}
+
+DATE=`date +%d_%m_%Y`
+RUN=kmer_analysis_${DATE} # day of run was 02_02_2019
+PLOIDY=1
+mkdir ${RUN}
+cd !$
+# macrogen sample
+SAMPLE=DON001
+ln -s ~/scratch/data/A_rabiei_WGS/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/trimmed_${SAMPLE}*.fastq.gz ./
+# run BB kmercount
+echo "cd $( pwd ); kmercountexact.sh in=trimmed_${SAMPLE}_R1.fastq.gz in2=trimmed_${SAMPLE}_R2.fastq.gz khist=${SAMPLE}_khist.txt peaks=${SAMPLE}_peaks.txt" | qsub -V -l select=1:ncpus=12:mem=24GB,walltime=5:00:00 -N bb_kmer # 5374018
+# agrivic sample
+SAMPLE=7_S40
+ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/AgriVic_BT2_process_05_04_2019/trimmed_${SAMPLE}*.fastq.gz ./
+# run BB kmercount
+seq 21 2 37 | parallel --dry-run kmercountexact.sh k={} in=trimmed_${SAMPLE}_R1.fastq.gz in2=trimmed_${SAMPLE}_R2.fastq.gz khist=${SAMPLE}_khist_k{}.txt peaks=${SAMPLE}_peaks_k{}.txt > ${SAMPLE}_${RUN}.bash
+
+# Run on parallel nodes (faster and preferred)
+# Prepare PBS script
+echo '#!/bin/bash -x
+#PBS -V
+#PBS -l select=1:ncpus=12:mem=48GB,walltime=01:30:00
+
+cd $PBS_O_WORKDIR
+gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > ${RUN}.pbspro
+
+# Run the commands 
+JOB_NAME=bb_kmer
+JOBS_NUM=$( wc -l ${SAMPLE}_${RUN}.bash | gawk '{print $1}' )
+JOB_ID=$( qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${SAMPLE}_${RUN}.bash ${RUN}.pbspro ) # 5374020[].pbsserver
+
+```
 
 ### Variant Call
 #### Using FreeBayes
