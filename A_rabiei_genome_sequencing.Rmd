@@ -112,7 +112,7 @@ Install needed software in a `conda` environment on Gowonda2.
 ```{bash setup_tools}
 # install snippy (need to fix internet connection to gowonda2 - use patched netcheck in ~/bin)
 ~/bin/netcheck
-conda install -n snippy -c conda-forge -c bioconda snippy bcbio-gff libgd xorg-libxpm libpng  libjpeg-turbo jpeg libtiff
+conda install -n snippy -c conda-forge -c bioconda snippy sra-tools bcbio-gff libgd xorg-libxpm libpng  libjpeg-turbo jpeg libtiff 
 # Clean extra space
 conda clean -y --all
 capnm git://github.com/IdoBar/XML-DOM-XPath-0.14@patch1
@@ -136,7 +136,8 @@ Adaptors needed to be removed, as well as very low quality bases/reads, so trimm
 Raw files quality after adaptor trimming was assessed with `r fontFmt("FastQC")` v0.11.8.
 
 ### Mapping to the reference genome and calling variants (using Snippy)
-The trimmed reads were mapped to the _A. rabiei_ reference genome, strain Me14 ([GCA_004011695.1](https://www.ncbi.nlm.nih.gov/assembly/GCA_004011695.1)) using `r fontFmt("Snippy")` v4.4.0. `r fontFmt("Snippy")` is a wrapper for popular bioinformatics tools, using `r fontFmt("bwa-mem")` to map the reads to the reference genome, followed by several commands of `r fontFmt("samtools")`, to specify a Read Group for each sample (provided to Snippy with the `--rgid` flag), mark duplicates and converted into coordinate-sorted, indexed BAM.  
+The trimmed reads were mapped to the _A. rabiei_ reference genome, strain Me14 ([GCA_004011695.1](https://www.ncbi.nlm.nih.gov/assembly/GCA_004011695.1)) using `r fontFmt("Snippy")` v4.4.0. [Snippy](https://github.com/tseemann/snippy) is a wrapper that makes use of popular bioinformatics tools, such as `r fontFmt("bwa-mem")` v0.7.17-r1188 to map the reads to the reference genome, followed by several commands of `r fontFmt("samtools")` v1.9 to specify a Read Group for each sample (provided to Snippy with the `--rgid` flag), mark duplicates and convert the alignments into coordinate-sorted, indexed BAM files.  
+The alignment files are then processed by `r fontFmt("Freebayes")` v1.3 to call variants from all samples and `r fontFmt("bcftools")` v1.9 and `r fontFmt("snpEff")` v4.3 to filter and annotate the variants and retain only high-quality variants (based on minimum depth and genotype quality thresholds) that are common to all samples and referred to as "core SNPs".  
 Mapping statistics were obtained with `r fontFmt("Qualimap")` v.2.2.2-dev [@okonechnikov_qualimap_2016] and consolidated along with pre and post-trimming QC measures into a single, interactive report for each batch using `r fontFmt("MultiQC")` v1.7 [@ewels_multiqc:_2016]. 
 
 ```{bash snippy}
@@ -156,8 +157,9 @@ ls -1 ../AgVic_WGS2018/AgriVic_BT2_process_05_04_2019/trimmed_* | parallel ln -s
 # remove poor samples
 ls -1 trimmed_* | egrep $IGNORE_SAMS | parallel my_rename -v 's/.gz/.gz.bak/' {}
 
+TMPLOC=$( mktemp -d --tmpdir=$HOME/ ) # create a temporary folder in the current path
 # Create the commands (individual file pairs first)
-find ./ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v genome=$GENOME.gb -v ncores=$NCORES '{n=split($1,a,"/"); read2=gensub("_R1\\.", "_R2.", "1", $1); basename=gensub(/trimmed_(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; printf("cd $PBS_O_WORKDIR; source ~/.bashrc; conda activate snippy; snippy --cpus %s --outdir %s --report --rgid %s --ref %s --R1 %s --R2 %s \n", ncores,  basename, basename, genome, $1, read2)}' > ${RUN}.bash
+find ./ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v genome=$GENOME.gb -v ncores=$NCORES -v tmpdir=$TMPLOC '{n=split($1,a,"/"); read2=gensub("_R1\\.", "_R2.", "1", $1); basename=gensub(/trimmed_(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; printf("cd $PBS_O_WORKDIR; source ~/.bashrc; conda activate snippy; snippy --cpus %s --tmpdir %s --outdir %s --report --rgid %s --ref %s --R1 %s --R2 %s \n", ncores, tmpdir, basename, basename, genome, $1, read2)}' > ${RUN}.bash
 
 # Prepare PBS script
 echo '#!/bin/bash -v
@@ -175,14 +177,16 @@ SNPY_ID=$( echo $SNPY_ID | egrep -o "[0-9]{7}"  )
 # record the array ID: 5247580[] Macrogen batch on Gowonda
 # find and remove empty files
 find . -size 0 -exec rm {} + 
-
+# remove tmp folder
+rm -rf $TMPLOC
 # Check that all jobs finished successfuly
 find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus"
 ```
 
-Run again, this time combining all the read files that correspond to the same sample.
+Or run them with the same sample name, but appended for each replicate (good for error estimation and visualisation)
 
-```{bash snippy-multi}
+
+```{bash snippy-ind-renamed}
 # Prepare the commands
 DATE=`date +%d_%m_%Y`
 # BATCH=macrogen
@@ -241,12 +245,12 @@ QUALIMAP_JOB="Snippy_qualimap_${DATE}"
 # create a sample/file/group file
 find . -name "*.bam" | gawk '{n=split($0, a, "/"); RG=a[2]; sub(/[a-h]$/, "", RG); printf "%s\t%s\t%s\n",a[2], $0, RG}' > $QUALIMAP_JOB.samples
 # run Qualimap
-QUALIMAP_JOB_ID=$( echo "cd $( pwd ) ; unset DISPLAY ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$SNPY_CORE_ID) # 5248673.pbsserver
+QUALIMAP_JOB_ID=$( echo "cd $( pwd ) ; unset DISPLAY ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=2:ncpus=12:mem=16GB,walltime=10:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$SNPY_CORE_ID) # 5248673.pbsserver
 QUALIMAP_JOB_ID=$( echo $QUALIMAP_JOB_ID | egrep -o "[0-9]{7}" )
 
 # multiqc report
 MULTIQC_JOB="Snippy_qc_${DATE}"
-echo "cd $( pwd ) ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID # 5248672.pbsserver
+echo "cd $( pwd ) ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=3:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID # 5248672.pbsserver
 
 
 # find and remove empty files
@@ -256,253 +260,99 @@ find . -size 0 -exec rm {} +
 find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus"
 ```
 
+Run again, this time combining all the read files that correspond to the same sample.
 
-
-#### Macrogen batch
-The report from Macrogen was parsed to extract the links and download all the relevant `.fastq.gz` and `.xlsx` files.  
-```{bash retrieve_macrogen_files}
-mkdir -p ~/scratch/data/A_rabiei_WGS/Macrogen_sequences_1702KHP-0164
-cd !$
-# Download Macrogen report file into the folder
-REPORT_PDF="1702KHP-0164_ALL_20171107141025.pdf"
-# Extract all links from the report and download them (skip existing)
-pdfx -v $REPORT_PDF | grep "[fastq\.gz|\.xls]" | cut -f2,2 -d " " | parallel wget -nc {}
-```
-
-```{bash trim_reads_macrogen}
-cd ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164
-# fix read file names
-my_rename -v 's/_([12].fastq)/_R\1/' *.fastq.gz
-# Remove duplicate files
-my_rename -v 's/.gz/.gz.dup/' 15CUR005*.fastq.gz
+```{bash snippy-multi}
 # Prepare the commands
 DATE=`date +%d_%m_%Y`
-BATCH=macrogen
-RUN="${BATCH}_BT2_process_${DATE}" # day of run was 02_02_2019
+# BATCH=macrogen
+RUN="Snippy_multi_${DATE}" # day of run was 02_02_2019
 mkdir ${RUN}
 cd !$
-GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
-READ_LENGTH=100
-PLOIDY=1
 NCORES=12
-RGPL=HiSeq2500 
-RGPU=HHCLJBCXY
-RGCN=Macrogen
+NNODES=2
+GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/Arab_me14"
+IGNORE_SAMS='11_S44|5B_S38|2_S34|11_S44|15CUR005|AGRF_18|AGRF_08|F15023|20_S53'
+# Link all trimmed files into current folder
+ls -1 ../Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/trimmed_* | parallel ln -s {} ./
+ls -1 ../AGRF_CAGRF19461_HGMLMAFXY/AGRF_BT2_process_04_04_2019/trimmed_AGRF_* | parallel ln -s {} ./
+ls -1 ../AgVic_WGS2018/AgriVic_BT2_process_05_04_2019/trimmed_* | parallel ln -s {} ./
+# remove poor quality samples
+ls -1 trimmed_* | egrep $IGNORE_SAMS | parallel my_rename -v 's/.gz/.gz.bak/' {}
 
-# Perform adapter trimming, mapping, deduplication, add RG, sort and index 
-find ../ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v bbmap_dir=$BBMAP_DIR -v genome=$GENOME -v RGPL=$RGPL -v RGPU=$RGPU -v RGCN=$RGCN -v ncores=$NCORES 'BEGIN{command=sprintf("bbduk.sh -Xmx1g ref=%s/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 qtrim=rl trimq=10 tpe tbo int minlen=30 ziplevel=9 ow", bbmap_dir)};{n=split($1,a,"/"); infile=gensub("_R1\\.", "_R#.", "1", $1); basename=gensub(/(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; printf("cd $PBS_O_WORKDIR; %s in=%s out=trimmed_%s_R#.fastq.gz stats=%s.stats ow && bowtie2 --very-sensitive -p %s -x %s -1 trimmed_%s_R1.fastq.gz -2 trimmed_%s_R2.fastq.gz --un-conc-gz %s_unmapped.fq.gz --no-unal | samblaster | picard AddOrReplaceReadGroups I=/dev/stdin O=%s_BT2_me14.dedup.rg.csorted.bam SM=%s ID=%s_%s LB=%s_%s PL=%s PU=%s CN=%s CREATE_INDEX=true  SO=coordinate \n", command, infile, basename, basename, ncores, genome, basename, basename, basename, basename, basename, basename, NR, basename, NR, RGPL,RGPU, RGCN)}' > ${RUN}.bash
-
-# Run on parallel nodes (faster and preferred)
-
-# Prepare PBS script
-echo '#!/bin/bash -v
-#PBS -V
-#PBS -l' "select=1:ncpus=$NCORES:mem=96GB,walltime=10:30:00
-
-cd \$PBS_O_WORKDIR
-gawk -v ARRAY_IND=\$PBS_ARRAY_INDEX 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > ${RUN}.pbspro
-
-# Run the commands 
-JOB_NAME=${RUN}
-JOBS_NUM=`wc -l ${RUN}.bash | gawk '{print $1}'`
-BT2_ID=$( qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${RUN}.bash  ${RUN}.pbspro ) 
-BT2_ID=$( echo $BT2_ID | egrep -o "[0-9]{7}"  )
-# record the array ID: 5247580[] Macrogen batch on Gowonda
-
-# Run FastQC on the output files
-QC_JOB=${BATCH}_trim_qc_"${DATE}"
-QC_JOB_ID=$( echo "cd $( pwd ) ; mkdir $QC_JOB; fastqc -t 12 -o $QC_JOB trimmed_*.fastq.gz" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00  -N trim_qc -W depend=afterok:$BT2_ID[] ) # 5248661.pbsserver
-QC_JOB_ID=$( echo $QC_JOB_ID | egrep -o "[0-9]{7}" )
-
-# Run qualimap on bam files (files need to be sorted)
-QUALIMAP_JOB="${BATCH}_qualimap_${DATE}"
-find . -name "*.bam" | gawk '{n=split($0, a, "/"); printf "%s\t%s\n",a[2], $0}' > $QUALIMAP_JOB.samples
-QUALIMAP_JOB_ID=$( echo "cd $( pwd ) ; unset DISPLAY ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$BT2_ID[] ) # 5248673.pbsserver
-QUALIMAP_JOB_ID=$( echo $QUALIMAP_JOB_ID | egrep -o "[0-9]{7}" )
-
-# multiqc report
-MULTIQC_JOB="${BATCH}_BT2_qc_${DATE}"
-echo "cd $( pwd ) ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID:$QC_JOB_ID # 5248672.pbsserver
-
-# collect mapping stats
-cat *.e$BT2_ID.* > ${RUN}.log
-egrep "Created read group|overall alignment rate" ${RUN}.log | gawk 'BEGIN{printf "sample_id\tmapping_rate\n"} NR%2==1{match($0, /SM=(.+?)$/, a); printf a[1]} NR%2==0{printf "\t%s\n",$1}'   > ${RUN}.stats.tmp
-
-# collect trimming stats
-
-egrep "Input:|Result:" ${RUN}.log | gawk -v OFS="\t" 'BEGIN{printf "input_reads\tinput_bases\tpost_trim_reads\tpost_trim_bases\n"}NR%2==1{printf "%s\t%s\t",$2,$4}NR%2==0{print $2,$5}' | paste ${RUN}.stats.tmp - >  ${RUN}.stats
-
-
-# find and remove empty files
-find . -size 0 -exec rm {} + 
-
-# Check that all jobs finished successfuly
-find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus" #  *m.e$JOB_ID.*
-
-```
-
-#### AGRF batch
-Download all the raw `.fastq.gz` files from AGRF.
-```{bash retrieve_files}
-mkdir -p ~/scratch/data/A_rabiei_WGS
-# Retrieve all files from AGRF
-rsync -avh -e ssh IdoBar1@agrf-data.agrf.org.au:files/AGRF_CAGRF19461_HGMLMAFXY ~/scratch/data/A_rabiei_WGS/
-```
-
-```{bash recal_trim_reads_AGRF}
-# Prepare the BBduk commands
-DATE=`date +%d_%m_%Y`
-BATCH=AGRF
-RUN="${BATCH}_BT2_process_${DATE}" # day of run was 02_02_2019
-mkdir ${RUN}
-cd !$
-GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
-READ_LENGTH=150
-NCORES=12
-PLOIDY=1
-LANES=$( ls -1 ../*.fastq.gz | egrep -o "_L[0-9]+?_" | sort | uniq | wc -l )
-RGPL=NextSeq 
-RGPU=HGMLMAFXY
-RGCN=AGRF
-
+# merge reads
 # Combine the read files from each lane (and remove barcode and flowcell information)
-MERGE_LANES=${BATCH}_merge_lanes
+mkdir merged_reads
+# download files for ArII from NCBI SRA
+netcheck
+fasterq-dump SRR1765987 -p -O ./merged_reads
+# gzip the files
+echo "cd $( pwd )/merged_reads ; parallel pigz -8 ::: *.fastq" | qsub -V -l select=1:ncpus=12:mem=12GB,walltime=2:00:00  -N gzip_reads
+
+MERGE_LANES=merge_lanes_{DATE}
 parallel --dryrun "eval cat {=s/L001/*/=} > {=s:.*/::; s/_HGMLMAFXY_[ACGT-]*_L001//; =}" ::: ../*L001*gz > $MERGE_LANES.cmds
 
+# either use 
+# create input file for snippy-multi of duplicated samples and rename to isolate name
+ egrep -v $IGNORE_SAMS $HOME/scratch/data/A_rabiei_WGS/A_rabiei_isolate_list_for_wgs.txt | tail -n+2 | sort -k2 | gawk  -v ORS="" 'NR==1{isolate=$2; printf "cat ",$1 }isolate!=$2{ printf "> merged_reads/%s_R1.fastq.gz \n cat trimmed_%s_R1.fastq.gz ", isolate, $1; isolate=$2; next}isolate==$2{printf "trimmed_%s_R1.fastq.gz ", $1}END{printf "> merged_reads/%s_R1.fastq.gz \n", isolate}'  > merge_reads_R1.cmds
+ 
+echo "cd $( pwd ) ; cat  merge_reads_R1.cmds | parallel " | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=00:20:00  -N merge_reads1
+# replace R1 with R2
+echo "cd $( pwd ) ; sed 's/_R1/_R2/g'  merge_reads_R1.cmds | parallel " | qsub -V -l select=1:ncpus=12:mem=8GB,walltime=00:20:00  -N merge_reads2
+ 
+TMPLOC=$( mktemp -d --tmpdir=$HOME/ ) # create a temporary folder in the current path 
+# prepare commands:
+# either use snippy-multi
+# snippy-multi snippy_input_samples.tab --ref $GENOME.gb --cpus $(( NCORES*NNODES )) > ${RUN}.bash
+# or with gawk
+ls -1 merged_reads/*_R1.fastq.gz | gawk -F"\t" -v genome=$GENOME.gb -v tmpdir=$TMPLOC -v ncores=$(( NCORES* NNODES )) '{RG=gensub("merged_reads/(.+)_R1.fastq.gz", "\\1", 1);  printf("snippy --cpus %s --tmpdir %s --outdir %s --report --rgid %s --ref %s --R1 %s --R2 %s \n", ncores, tmpdir, RG, RG, genome, $1, gensub(/_R1/, "_R2", 1))}' > ${RUN}.bash
+
+
 # Prepare PBS script
-echo '#!/bin/bash -v
+echo '#!/bin/bash 
 #PBS -V
-#PBS -l' "select=1:ncpus=$NCORES:mem=96GB,walltime=10:30:00
+#PBS -l' "select=${NNODES}:ncpus=${NCORES}:mem=48GB,walltime=5:30:00
 
 cd \$PBS_O_WORKDIR
+source ~/.bashrc 
+conda activate snippy
 gawk -v ARRAY_IND=\$PBS_ARRAY_INDEX 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > ${RUN}.pbspro
-# Run merge array
-MERGE_NUM=$( cat $MERGE_LANES.cmds | wc -l )
-MERGE_LANES_ID=$( qsub -J1-$MERGE_NUM -N ${MERGE_LANES:0:11} -vCMDS_FILE=$MERGE_LANES.cmds )
-MERGE_LANES_ID=$( echo $MERGE_LANES_ID | egrep -o "[0-9]{7}" )
-
-# Perform adapter trimming, mapping, deduplication, add RG, sort and index 
-find ./ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v bbmap_dir=$BBMAP_DIR -v genome=$GENOME -v RGPL=$RGPL -v RGPU=$RGPU -v RGCN=$RGCN -v ncores=$NCORES 'BEGIN{command=sprintf("bbduk.sh -Xmx1g ref=%s/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 qtrim=rl trimq=10 tpe tbo int minlen=30 ziplevel=9 ow", bbmap_dir)};{n=split($1,a,"/"); infile=gensub("_R1\\.", "_R#.", "1", $1); basename=gensub(/(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; printf("cd $PBS_O_WORKDIR; %s in=%s out=trimmed_%s_R#.fastq.gz stats=%s.stats ow && bowtie2 --very-sensitive -p %s -x %s -1 trimmed_%s_R1.fastq.gz -2 trimmed_%s_R2.fastq.gz --un-conc-gz %s_unmapped.fq.gz --no-unal | samblaster | picard AddOrReplaceReadGroups I=/dev/stdin O=%s_BT2_me14.dedup.rg.csorted.bam SM=%s ID=%s_%s LB=%s PL=%s PU=%s CN=%s CREATE_INDEX=true  SO=coordinate \n", command, infile, basename, basename, ncores, genome, basename, basename, basename, basename, basename, basename, NR, basename, RGPL,RGPU, RGCN)}' > ${RUN}.bash
-
-# Run on parallel nodes (faster and preferred)
 
 # Run the commands 
-JOB_NAME=${RUN}
-JOBS_NUM=`wc -l ${RUN}.bash | gawk '{print $1}'`
-BT2_ID=$( qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${RUN}.bash  ${RUN}.pbspro ) 
-BT2_ID=$( echo $BT2_ID | egrep -o "[0-9]{7}"  )
+# JOB_NAME=${RUN}
+JOBS_NUM=$( cat ${RUN}.bash | wc -l | gawk '{print $1}' ) # head -n -1
+SNPY_ID=$( qsub -J1-$JOBS_NUM -N ${RUN:0:11} -vCMDS_FILE=${RUN}.bash ${RUN}.pbspro ) 
+SNPY_ID=$( echo $SNPY_ID | egrep -o "[0-9]{7}"  )
 # record the array ID: 5247580[] Macrogen batch on Gowonda
 
-# Run FastQC on the output files
-QC_JOB=${BATCH}_trim_qc_"${DATE}"
-QC_JOB_ID=$( echo "cd $( pwd ) ; mkdir $QC_JOB; fastqc -t 12 -o $QC_JOB trimmed_*.fastq.gz" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00  -N trim_qc -W depend=afterok:$BT2_ID[] ) # 5248661.pbsserver
-QC_JOB_ID=$( echo $QC_JOB_ID | egrep -o "[0-9]{7}" )
+# Run snippy-core on the output files
+SNPY_FOLDS=$( ls -1 merged_reads/*_R1.fastq.gz | gawk -vORS=" " '{RG=gensub("merged_reads/(.+)_R1.fastq.gz", "\\1", 1); print RG}' )
+SNPY_REF="'$( echo $SNPY_FOLDS | cut -f1,1 -d" " )/ref.fa'"
+CORE_JOB=snippy_core_"${DATE}"
+# CORE_CMD=$( tail -n1 ${RUN}.bash )
+SNPY_CORE_ID=$( echo "cd $( pwd ) ; source ~/.bashrc ; conda activate snippy; snippy-core --ref $SNPY_REF $SNPY_FOLDS " | qsub -V -l select=${NNODES}:ncpus=${NCORES}:mem=48GB,walltime=1:00:00  -N ${CORE_JOB:0:11} -W depend=afterok:$SNPY_ID[] ) # 5248661.pbsserver
+SNPY_CORE_ID=$( echo $SNPY_CORE_ID | egrep -o "[0-9]{7}" )
 
 # Run qualimap on bam files (files need to be sorted)
-QUALIMAP_JOB="${BATCH}_qualimap_${DATE}"
-
-QUALIMAP_JOB_ID=$( echo "cd $( pwd ) ; unset DISPLAY ; ls -1 *.csorted.bam | gawk '{match(\$0, /(.+)_BT2_me14.dedup.rg.csorted.bam/, a); printf \"%s\\t%s\\n\",a[1], \$0 }' > $QUALIMAP_JOB.samples ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$BT2_ID[] ) # 5248673.pbsserver
+QUALIMAP_JOB="Snippy_qualimap_${DATE}"
+# create a sample/file/group file
+find -L . -name "*.bam" | gawk '{n=split($0, a, "/");printf "%s\t%s\n",a[2], $0}' > $QUALIMAP_JOB.samples
+# run Qualimap
+QUALIMAP_JOB_ID=$( echo "cd $( pwd ) ; unset DISPLAY ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=2:ncpus=12:mem=16GB,walltime=10:00:00 -N ${QUALIMAP_JOB:0:11} ) # 5248673.pbsserver
 QUALIMAP_JOB_ID=$( echo $QUALIMAP_JOB_ID | egrep -o "[0-9]{7}" )
 
 # multiqc report
-MULTIQC_JOB="${BATCH}_BT2_qc_${DATE}"
-echo "cd $( pwd ) ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID:$QC_JOB_ID # 5248672.pbsserver
-
-# collect mapping stats
-cat *.e$BT2_ID.* > ${RUN}.log
-egrep "Created read group|overall alignment rate" ${RUN}.log | gawk 'BEGIN{printf "sample_id\tmapping_rate\n"} NR%2==1{match($0, /SM=(.+?)$/, a); printf a[1]} NR%2==0{printf "\t%s\n",$1}'   > ${RUN}.stats.tmp
-
-# collect trimming stats
-
-egrep "Input:|Result:" ${RUN}.log | gawk -v OFS="\t" 'BEGIN{printf "input_reads\tinput_bases\tpost_trim_reads\tpost_trim_bases\n"}NR%2==1{printf "%s\t%s\t",$2,$4}NR%2==0{print $2,$5}' | paste ${RUN}.stats.tmp - >  ${RUN}.stats
+MULTIQC_JOB="Snippy_qc_${DATE}"
+echo "cd $( pwd ) ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=3:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID # 5248672.pbsserver
 
 
 # find and remove empty files
 find . -size 0 -exec rm {} + 
-
+# remve temp dir
+rm -rf $TMPLOC
 # Check that all jobs finished successfuly
-find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus" #  *m.e$JOB_ID.*
-# Done!
+find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus"
 ```
-
-#### AgriVic batch
-
-```{bash recal_trim_reads_AgVic}
-cd ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018
-# Prepare the BBduk commands
-BATCH=AgriVic
-DATE=`date +%d_%m_%Y`
-RUN="${BATCH}_BT2_process_${DATE}" # day of run was 02_02_2019
-mkdir ${RUN}
-cd !$
-GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
-# LANES=`ls -1 *.fastq.gz | egrep -o "_L[0-9]+?_" | sort | uniq | wc -l`
-READ_LENGTH=150
-PLOIDY=1
-NCORES=12
-RGPL=HiSeq3000
-RGPU=HWYNNBBXX
-RGCN=AgriVic
-
-# fix read file names
-ln -s ../*_R*.fastq.gz ./
-my_rename -v 's/_L00[1-4]//; s/HWYNNBBXX//' *.fastq.gz
-# my_rename -v 's/_001//; s/_L003//' *.fastq.gz
-
-# Perform adapter trimming, mapping, deduplication, add RG, sort and index 
-find ./ -maxdepth 1 -name "*_R1.fastq.gz" | sort | gawk -F"\t" -v bbmap_dir=$BBMAP_DIR -v genome=$GENOME -v RGPL=$RGPL -v RGPU=$RGPU -v RGCN=$RGCN -v ncores=$NCORES 'BEGIN{command=sprintf("bbduk.sh -Xmx1g ref=%s/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 qtrim=rl trimq=10 tpe tbo int minlen=30 ziplevel=9 ow", bbmap_dir)};{n=split($1,a,"/"); infile=gensub("_R1\\.", "_R#.", "1", $1); basename=gensub(/(.+)_R1.fastq.gz/, "\\1", "1", a[n]) ; printf("cd $PBS_O_WORKDIR; %s in=%s out=trimmed_%s_R#.fastq.gz stats=%s.stats ow && bowtie2 --very-sensitive -p %s -x %s -1 trimmed_%s_R1.fastq.gz -2 trimmed_%s_R2.fastq.gz --un-conc-gz %s_unmapped.fq.gz --no-unal | samblaster | picard AddOrReplaceReadGroups I=/dev/stdin O=%s_BT2_me14.dedup.rg.csorted.bam SM=%s ID=%s_%s LB=%s PL=%s PU=%s CN=%s CREATE_INDEX=true  SO=coordinate \n", command, infile, basename, basename, ncores, genome, basename, basename, basename, basename, basename, basename, NR, basename, RGPL,RGPU, RGCN)}' > ${RUN}.bash
-
-# Run on parallel nodes (faster and preferred)
-# Prepare PBS script
-echo '#!/bin/bash -v
-#PBS -V
-#PBS -l' "select=1:ncpus=${NCORES}:mem=96GB,walltime=10:30:00
-
-cd \$PBS_O_WORKDIR
-gawk -v ARRAY_IND=\$PBS_ARRAY_INDEX 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > ${RUN}.pbspro
-
-# Run the commands 
-JOB_NAME=${RUN}
-JOBS_NUM=$( wc -l ${RUN}.bash | gawk '{print $1}' )
-BT2_ID=$( qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${RUN}.bash  ${RUN}.pbspro ) 
-BT2_ID=$( echo $BT2_ID | egrep -o "[0-9]{7}"  )
-# record the array ID: 5247580[] Macrogen batch on Gowonda
-
-# Run FastQC on the output files
-QC_JOB=${BATCH}_trim_qc_"${DATE}"
-QC_JOB_ID=$( echo "cd $( pwd ) ; mkdir $QC_JOB; fastqc -t 12 -o $QC_JOB trimmed_*.fastq.gz" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00  -N trim_qc -W depend=afterok:$BT2_ID[] ) # 5248661.pbsserver
-QC_JOB_ID=$( echo $QC_JOB_ID | egrep -o "[0-9]{7}" )
-
-# Run qualimap on bam files (files need to be sorted)
-QUALIMAP_JOB="${BATCH}_qualimap_${DATE}"
-
-QUALIMAP_JOB_ID=$( echo "cd $( pwd ) ; unset DISPLAY ; ls -1 *.csorted.bam | gawk '{match(\$0, /(.+)_BT2_me14.dedup.rg.csorted.bam/, a); printf \"%s\\t%s\\n\",a[1], \$0 }' > $QUALIMAP_JOB.samples ; qualimap multi-bamqc -r -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB -outfile $QUALIMAP_JOB.pdf" | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${QUALIMAP_JOB:0:11} -W depend=afterok:$BT2_ID[] ) # 5248673.pbsserver
-QUALIMAP_JOB_ID=$( echo $QUALIMAP_JOB_ID | egrep -o "[0-9]{7}" )
-
-# multiqc report
-MULTIQC_JOB="${BATCH}_BT2_qc_${DATE}"
-echo "cd $( pwd ) ; multiqc -i $MULTIQC_JOB -o $MULTIQC_JOB ." | qsub -V -l select=1:ncpus=12:mem=4GB,walltime=1:00:00 -N ${MULTIQC_JOB:0:11} -W depend=afterok:$QUALIMAP_JOB_ID:$QC_JOB_ID # 5248672.pbsserver
-
-# collect mapping stats
-cat *.e$BT2_ID.* > ${RUN}.log
-egrep "Created read group|overall alignment rate" ${RUN}.log | gawk 'BEGIN{printf "sample_id\tmapping_rate\n"} NR%2==1{match($0, /SM=(.+?)$/, a); printf a[1]} NR%2==0{printf "\t%s\n",$1}'   > ${RUN}.stats.tmp
-
-# collect trimming stats
-
-egrep "Input:|Result:" ${RUN}.log | gawk -v OFS="\t" 'BEGIN{printf "input_reads\tinput_bases\tpost_trim_reads\tpost_trim_bases\n"}NR%2==1{printf "%s\t%s\t",$2,$4}NR%2==0{print $2,$5}' | paste ${RUN}.stats.tmp - >  ${RUN}.stats
-
-
-# find and remove empty files
-find . -size 0 -exec rm {} + 
-rm *.tmp
-
-# Check that all jobs finished successfuly
-find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus" #  *m.e$JOB_ID.*
-# Done!
-```
-
-
-
 
 #### Contaminations in Macrogen samples
 Both the initial QC and the mapping results show that there was a contamination in the DNA samples of at least three isolates: 16CUR019, 15CUR003, FT15023. This conclusion was obvious from the different GC content signatures of the three isolates (`r figs(name="GC_cont",display="cite")`) compared with the other isolates and from the low mapping rates of these isolates to the _A. rabiei_ reference genome (see bottom of `r tbls(name="mapping_rates",display="cite")`).  
@@ -517,62 +367,70 @@ To further investigate the origin of the contamination, the reads that didn't ma
 The assembled contigs will be BLASTed against the nr NCBI database, with species and kingdom annotation and the 20 most common organisms will be identified from each sample.
 
 Samples with less than 20% mapping and x15 coverage were removed from the rest of the analysis (see highlighted rows in `r tbls(name="mapping_rates",display="cite")`).  
-A comparison between the sequencing data and mapping statistics of both batches is provided in `r tbls(name="mapping_sum",display="cite")`.
-_To process mapping summary table, copy the `bbmap.stats` and `qualimap.html` files into `raw_data` folder_
 
-```{bash clumpify_unmapped}
+Error rates were estimated by individually processing the files from each batch and assessing the rate of mismatch variant calls within replicates of the same isolate.
+_To process mapping table, copy the `multisampleBamQcReport.html` file from the server to the local analysis folder_
 
-```
-
-
-```{r mapping_table, eval=TRUE, echo=FALSE}
-analysis_folder <- "../BB_vars_26_02_2019"
+```{r snippy_stats, eval=TRUE, echo=FALSE}
 analysis_basename <- "A_rabiei_2018"
-variant_method <- "haplo.fb"
+analysis_name <- "Snippy_multi_17_07_2019"
+analysis_folder <- file.path("..", analysis_name)
+variant_method <- "snippy"
 # analysis_folder <- "../FB_vars_01_03_2019"
 # analysis_outdir <- glue("./output/{variant_method}/")
+error_rates <- readxl::read_excel("output/results/pipeline_comparison.xlsx", 
+                                  sheet = "Snippy_multi_07_07_2019") %>% 
+  select(-vcf_file)
+mean_allele_error <- mean(error_rates$allele_error_rate)
+stats_table <- read_tsv(file.path(analysis_folder,"core.txt")) 
 
-mapping_table <- list.files(analysis_folder, ".bbmap.stats", full.names = TRUE) %>% map_df(read_tsv) %>% 
-  mutate_at(vars(contains("mapped")),  ~as.numeric(sub("%", "", ., fixed=TRUE))/100) %>%
-  mutate(Mapping_rate=rowMeans(.[,-1]), Mapping_tool = "BBmap (v38.22)", 
-         Sample_id=str_extract(.$sample_id, paste(sequencing_table$Submission_id, collapse = "|"))) %>%
-  group_by(Sample_id, Mapping_tool) %>%
-  summarise(Mapping_rate=mean(Mapping_rate)) %>% ungroup() %>% 
-  left_join(sequencing_table,by=c("Sample_id"="Submission_id")) %>%
-# mutate( Isolate=sequencing_dict[sample_id]) %>% 
-  dplyr::select(Isolate, Mapping_rate, Mapping_tool, Sample_id, Sequencing_Centre) 
+
+# mapping_table <- list.files(analysis_folder, ".bbmap.stats", full.names = TRUE) %>% map_df(read_tsv) %>% 
+#   mutate_at(vars(contains("mapped")),  ~as.numeric(sub("%", "", ., fixed=TRUE))/100) %>%
+#   mutate(Mapping_rate=rowMeans(.[,-1]), Mapping_tool = "BBmap (v38.22)", 
+#          Sample_id=str_extract(.$sample_id, paste(sequencing_table$Submission_id, collapse = "|"))) %>%
+#   group_by(Sample_id, Mapping_tool) %>%
+#   summarise(Mapping_rate=mean(Mapping_rate)) %>% ungroup() %>% 
+#   left_join(sequencing_table,by=c("Sample_id"="Submission_id")) %>%
+# # mutate( Isolate=sequencing_dict[sample_id]) %>% 
+#   dplyr::select(Isolate, Mapping_rate, Mapping_tool, Sample_id, Sequencing_Centre) 
 
 # Load qualimap statistics (copy summary html files to raw_data folder)
 
-qualimap_files <- list.files(analysis_folder, "multisampleBamQcReport.html", full.names = TRUE, 
+qualimap_files <- list.files(analysis_folder, "multisampleBamQcReport.html", 
+                             full.names = TRUE, 
                              recursive = TRUE)
 exclude_columns <- c("Coverage std", "Insert size median")
   # mutate(`Pathog. Group`=samples_table$Pathogenicity[match(samples_table$Isolate, .$Isolate)] ) 
-qualimap_results <-  qualimap_files %>% map_df(~htmltab(., which = "//td/b[text() = 'Sample name']/ancestor::table")) %>% 
-  rename(Sample_id=`Sample name`, Coverage=`Coverage mean`) %>% 
+qualimap_results <-  qualimap_files[1] %>% map_df(~htmltab(., which = "//td/b[text() = 'Sample name']/ancestor::table")) %>% 
+  rename(Isolate=`Sample name`, Coverage=`Coverage mean`) %>% 
   dplyr::select(-one_of(exclude_columns)) %>% 
-  mutate_at(.vars = vars(-starts_with("Sample")), .funs = as.numeric) %>%
-  left_join(., mapping_table) %>% 
+  mutate_at(.vars = vars(-starts_with("Isolate")), .funs = as.numeric) %>%
+  left_join(., error_rates %>% select(Isolate=replicate_group, Error_rate=allele_error_rate,
+                                       Replicates=replicate_num)) %>%
   arrange(Isolate, desc(Coverage)) %>% set_names(., gsub(" ", "_", colnames(.))) %>%
-  dplyr::select(Isolate, GC_percentage, Mapping_quality_mean, Mapping_rate, Coverage, Mapping_tool, Sample_id, Sequencing_Centre) %>%
-  write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.stats"), ".txt", "./output/results", dateformat = FALSE))
+  # dplyr::select(Isolate, GC_percentage, Mapping_quality_mean, Mapping_rate, Coverage, Mapping_tool, Sample_id, Sequencing_Centre) %>%
+  write_csv(filedate(glue::glue("{analysis_basename}_{analysis_name}.mapping.stats"), ".txt", "./output/results", dateformat = FALSE))
 
 # Summarise mapping results
-mapping_summary <- qualimap_results %>% filter(Coverage>20) %>% 
-  group_by(Sequencing_Centre) %>% 
-  summarise(Coverage=sprintf("x%.2f",mean(Coverage)), 
-            Mapping_rate=sprintf("%.2f%%", mean(Mapping_rate, na.rm=TRUE)*100),
-                                     Mapping_qual=round(mean(Mapping_quality_mean), 2),
-            Files=n()) %>%
-  # mutate(Reads_per_file=format(c(2224642.64, 36500108.00), 
-  #                              digits = 2, scientific = TRUE)) %>%
-  arrange(desc(Sequencing_Centre)) %>% 
-  write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.sum"), ".txt", "./output/results", dateformat = FALSE))
+# mapping_summary <- qualimap_results %>% filter(Coverage>20) %>% 
+#   group_by(Sequencing_Centre) %>% 
+#   summarise(Coverage=sprintf("x%.2f",mean(Coverage)), 
+#             Mapping_rate=sprintf("%.2f%%", mean(Mapping_rate, na.rm=TRUE)*100),
+#                                      Mapping_qual=round(mean(Mapping_quality_mean), 2),
+#             Files=n()) %>%
+#   # mutate(Reads_per_file=format(c(2224642.64, 36500108.00), 
+#   #                              digits = 2, scientific = TRUE)) %>%
+#   arrange(desc(Sequencing_Centre)) %>% 
+#   write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.sum"), ".txt", "./output/results", dateformat = FALSE))
 
 ```
 
 ```{r map_stats, eval=TRUE}
-datatable(as.data.frame(qualimap_results %>% mutate_if(is.numeric, ~round(., 2))), caption=tbls("mapping_rates")) %>% #, 
+datatable(as.data.frame(qualimap_results), # %>% mutate_if(is.numeric, ~round(., 2))),
+          caption=tbls("mapping_rates")) %>% #, 
+  formatRound(~Coverage+GC_percentage+Mapping_quality_mean) %>% 
+  formatPercentage('Error_rate', 2) %>% 
           # options = list(dom = 'tf', pageLength = 40)) %>%
   formatStyle("Coverage", target = "row",
   backgroundColor = styleInterval(c(10,20), c('#ef3125', '#feed95', NA))
@@ -595,228 +453,6 @@ datatable(as.data.frame(qualimap_results %>% mutate_if(is.numeric, ~round(., 2))
 include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
 ```
 
-
-### Variant Call
-#### Using FreeBayes
-The recalibrated alignment files of duplicate samples (excluding the ones that did not pass QC) were combined to increase coverage and standardise sample names as isolates (set as read groups). The isolate BAM files were merged once more into a single file that was used as input for `r fontFmt("FreeBayes")` v1.2.0 [@garrison_haplotype-based_2012] to assign variant probability scores and call variants.
-
-```{bash FB_var_call_combined}
-PLOIDY=1
-DATE=`date +%d_%m_%Y`
-RUN=FB_vars_${DATE} # day of run was 02_02_2019
-mkdir -p $HOME/scratch/data/A_rabiei_WGS/${RUN}
-cd !$
-# JOB_NAME="BBmap_me14_vars"
-GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
-NCORES=12
-
-# link all sam files in the same folder
-ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/AgriVic_BT2_process_05_04_2019/*.csorted.bam ./
-ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BT2_process_04_04_2019/*.csorted.bam ./
-ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/*.csorted.bam ./
-
-MERGE_JOB="merge_bams"
-mkdir -p $MERGE_JOB
-cd !$
-
-IGNORE_SAMS='11_S44|5B_S38|2_S34|11_S44|15CUR005|AGRF_18|AGRF_08|F15023|20_S53'
-# merge sam files of duplicated samples and rename to isolate name
- egrep -v $IGNORE_SAMS $HOME/scratch/data/A_rabiei_WGS/A_rabiei_isolate_list_for_wgs.txt | tail -n+2 | sort -k2 | gawk  -v ORS="" 'BEGIN{cmd="cd $PBS_O_WORKDIR; picard MergeSamFiles USE_THREADING=true QUIET=true COMPRESSION_LEVEL=0 O=/dev/stdout"}NR==1{printf "%s I=../%s_BT2_me14.dedup.rg.csorted.bam", cmd, $1; isolate=$2; next}isolate!=$2{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin ID=%s LB=%s PL=Illumina PU=combined SM=%s O=%s.csorted.bam\n%s I=../%s_BT2_me14.dedup.rg.csorted.bam", isolate, isolate, isolate,  isolate, cmd, $1; isolate=$2; next}isolate==$2{printf " I=../%s_BT2_me14.dedup.rg.csorted.bam", $1}END{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin ID=%s LB=%s PL=Illumina PU=mixed SM=%s O=%s.csorted.bam\n", isolate, isolate, isolate,  isolate}'  > $MERGE_JOB.cmds
- 
-# Prepare PBS script
-echo '#!'"/bin/bash -v
-#PBS -V
-#PBS -l select=1:ncpus=${NCORES}:mem=64GB,walltime=01:30:00
-
-cd \$PBS_O_WORKDIR
-gawk -v ARRAY_IND=\$PBS_ARRAY_INDEX 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > $MERGE_JOB.pbspro
-
-MERGE_JOB_ID=$( qsub -J1-$( wc -l $MERGE_JOB.cmds | gawk '{print $1}' ) -N $MERGE_JOB -vCMDS_FILE=$MERGE_JOB.cmds $MERGE_JOB.pbspro )
-# 5248653[].pbsserver
-MERGE_JOB_ID=$( echo $MERGE_JOB_ID | egrep -o "[0-9]{7}")
-
-# check jobs completion
-grep "ExitStatus"  *.e$MERGE_JOB_ID*
-# remove links
-find . -type l -exec rm {} +
-cd - 
-
-# merge again to a single file
-BAMS=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -v ORS=" " '{print "I="$1}' )
-BAM_FILES=$(  egrep -v $IGNORE_SAMS $HOME/scratch/data/A_rabiei_WGS/A_rabiei_isolate_list_for_wgs.txt | tail -n+2 | sort -k2 | cut -f2,2 | uniq  | gawk -vORS=" " '{print "merge_bams/"$1".csorted.bam"}' )
-FINAL_MERGE=$( echo "cd $( pwd ) ; sambamba merge -t $NCORES -l 8 all.csorted.combined.bam $BAM_FILES " | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Final_merge -W depend=afterok:$MERGE_JOB_ID[]) 
-#FINAL_MERGE=$( echo "cd $( pwd ) ; picard MergeSamFiles USE_THREADING=true SO=coordinate $BAMS O=all.csorted.combined.bam" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Final_merge ) # 5248672.pbsserver
-FINAL_MERGE_ID=$( echo $FINAL_MERGE | egrep -o "[0-9]{7}")
-
-# save read groups to file
-sambamba view -H all.csorted.combined.bam | grep "^@RG" > all_read_groups.txt
-# BAM_FILES=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -vORS=" " '1' )
-# calculate coverage
-CALC_COV=$( echo "cd $( pwd ) ;  sambamba depth base --combined all.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fasta.fai 500 > targets.regions " | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Calc_cov -W depend=afterok:$FINAL_MERGE_ID ) # 5248672.pbsserver
-CALC_COV_ID=$( echo $CALC_COV | egrep -o "[0-9]{7}")
-# /export/home/s2978925/.pyenv/versions/miniconda2-latest/bin/bamtools coverage -in
-# prepare Freebayes commands
-FB=freebayes_${DATE}
-FB_CMDS=$( echo "cd $( pwd ) ; cat targets.regions | parallel --dry-run -k \"freebayes -p $PLOIDY -f $GENOME.fasta all.csorted.combined.bam --region {}\" > $FB.cmds" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N FB_cmds -W depend=afterok:$CALC_COV_ID ) # 5248672.pbsserver
-# get job_id
-FB_CMDS_ID=$( echo $FB_CMDS | egrep -o "[0-9]{7}")
-
-# Send freebayes jobs to the cluster
-# Prepare PBS script
-echo '#!'"/bin/bash -v
-#PBS -V
-#PBS -l select=1:ncpus=${NCORES}:mem=64GB,walltime=20:00:00
-"'
-cd $PBS_O_WORKDIR
-ARRAYID=$( echo $PBS_ARRAY_ID | egrep -o "[0-9]{7}" )
-gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR>(${NCORES}*3*(ARRAY_IND-1)) && NR<=(ARRAY_IND*${NCORES}*3)' \${CMDS_FILE} | parallel -k -j ${NCORES} --joblog"' ${CMDS_FILE}.p$ARRAYID.$PBS_ARRAY_INDEX' > freebayes.pbspro
-
-NCMDS=$( wc -l $FB.cmds | gawk '{print $1}')
-NJOBS=$(( NCMDS/NCORES/3 + 1  ))
-FB_JOB=$( qsub -J1-$NJOBS -N ${FB:0:11} -W depend=afterok:$FB_CMDS_ID -vCMDS_FILE=$FB.cmds freebayes.pbspro )
-# 5270639[1-4] completed successfully (the rest needed more processing time)
-FB_JOB_ID=$( echo $FB_JOB | egrep -o "[0-9]{7}")
-
-CONCAT_FB=$( echo "cd $( pwd ) ; cat *.o$FB_JOB_ID* | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_isolates_haplo.fb.vcf" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=10:00:00 -N FB_vcf -W depend=afterok:$FB_JOB_ID[] -m e -M i.bar@griffith.edu.au)
-CONCAT_FB_ID=$( echo $CONCAT_FB | egrep -o "[0-9]{7}" )
-
-# check for success/failure of FB commands
-tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==1' > $FB.failed.cmds
-tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==0' > $FB.successful.cmds
-
-# Produce vcf stats
-SAMPLES=$( cut -f6 all_read_groups.txt | gawk -F":" -vORS="," '{print $2}' | sed 's/,$//' )
-FB_STATS=$( echo "cd $( pwd ) ; mkdir ${FB}_stats; bcftools stats -F $GENOME.fasta -s $SAMPLES A_rabiei_2018_isolates_haplo.fb.vcf > ${FB}_stats/A_rabiei_2018_isolates_haplo.fb.vcf.stats; plot-vcfstats -p ${FB}_stats ${FB}_stats/A_rabiei_2018_isolates_haplo.fb.vcf.stats" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=10:00:00 -N FB_vcfstats -W depend=afterok:$CONCAT_FB_ID -m e -M i.bar@griffith.edu.au)
-FB_STATS_ID=$( echo $FB_STATS | egrep -o "[0-9]{7}" )
-
-# find and remove empty files
-find . -size 0 -exec rm {} +
-
-# check jobs completion
-find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus"
-
-```
-
-It is advised to process each sample separately as well to be able to estimate error rates and expected relatedness between duplicate samples from the same isolate.
-
-```{bash FB_var_call_ind}
-PLOIDY=1
-DATE=`date +%d_%m_%Y`
-RUN=FB_vars_ind_${DATE} # day of run was 02_02_2019
-mkdir -p $HOME/scratch/data/A_rabiei_WGS/${RUN}
-cd !$
-# JOB_NAME="BBmap_me14_vars"
-GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
-NCORES=12
-
-# get number of reads from all input files
-mkdir raw_fq
-cd !$
-ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/*.f*q.gz ./
-ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BB_process_22_02_2019/AGRF_*R?.f*q.gz ./
-ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/*.f*q.gz ./
-# remove flowcell and barcode information
-my_rename -v 's/_L00[1-9]//; s/_HGMLMAFXY_[ACGT-]+//' *.f*q.gz #  
-# calculate number of reads for each pair
-FQ_STATS=$(  find `pwd` -name "*.f*q.gz" | parallel --dry-run "printf '{/.}\t{=s/.+_(R[12]).fastq.gz/\1/=}\t%s\n' \$(( \$(pigz -cd {} | wc -l)/4 ))" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N read_stats )
-FQ_STATS_ID=$( echo $FQ_STATS | egrep -o "[0-9]{7}" )
-cp read_stats.o$FQ_STATS_ID ../${RUN}_raw_reads.tsv
-cd - 
-
-# process bams
-mkdir ind_bams
-
-# link all sam files in the same folder
-ln -s ~/scratch/data/A_rabiei_WGS/AgVic_WGS2018/AgriVic_BT2_process_05_04_2019/*.csorted.bam ./ind_bams/
-ln -s ~/scratch/data/A_rabiei_WGS/AGRF_CAGRF19461_HGMLMAFXY/AGRF_BT2_process_04_04_2019/*.csorted.bam ./ind_bams/
-ln -s ~/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/*.csorted.bam ./ind_bams/
-# remove lane information
-my_rename -v 's/_L00[1-9]//' *L00*.bam
-MERGE_JOB="merge_bams"
-
-IGNORE_SAMS='11_S44|5B_S38|2_S34|11_S44|15CUR005|AGRF_18|AGRF_08|F15023|20_S53'
-
-# merge ind files to a single bam file (keep submission ids)
-# BAMS=$( ls -1 $MERGE_JOB/*.csorted.bam | egrep -v $IGNORE_SAMS| gawk -v ORS=" " '{print "I="$1}' )
-BAM_FILES=$( ls -1 ind_bams/*.csorted.bam | egrep -v $IGNORE_SAMS | gawk -vORS=" " '1' )
-FINAL_MERGE=$( echo "cd $( pwd ) ; sambamba merge -t $NCORES all_ind.csorted.combined.bam $BAM_FILES" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Final_merge ) # 5248672.pbsserver
-FINAL_MERGE_ID=$( echo $FINAL_MERGE | egrep -o "[0-9]{7}")
-
-
-# BAM_FILES=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -vORS=" " '1' )
-
-# calculate coverage
-CALC_COV=$( echo "cd $( pwd ) ;  sambamba depth base --combined all_ind.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fasta.fai 500 > targets.regions " | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Calc_cov -W depend=afterok:$FINAL_MERGE_ID ) # 5248672.pbsserver
-CALC_COV_ID=$( echo $CALC_COV | egrep -o "[0-9]{7}")
-# /export/home/s2978925/.pyenv/versions/miniconda2-latest/bin/bamtools coverage -in
-# prepare Freebayes commands
-FB=freebayes_${DATE}
-FB_CMDS=$( echo "cd $( pwd ) ; cat targets.regions | parallel --dry-run -k \"freebayes -p $PLOIDY -f $GENOME.fasta all_ind.csorted.combined.bam --region {}\" > $FB.cmds" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N FB_cmds -W depend=afterok:$CALC_COV_ID ) # 5248672.pbsserver
-# get job_id
-FB_CMDS_ID=$( echo $FB_CMDS | egrep -o "[0-9]{7}")
-
-# Send freebayes jobs to the cluster
-# Prepare PBS script
-echo '#!'"/bin/bash -v
-#PBS -V
-#PBS -l select=1:ncpus=${NCORES}:mem=64GB,walltime=20:00:00
-"'
-cd $PBS_O_WORKDIR
-ARRAYID=$( echo $PBS_ARRAY_ID | egrep -o "[0-9]{7}" )
-gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR>=(${NCORES}*3*(ARRAY_IND-1)) && NR<=(ARRAY_IND*${NCORES}*3)' \${CMDS_FILE} | parallel -k -j ${NCORES} --joblog"' ${CMDS_FILE}.p$ARRAYID.$PBS_ARRAY_INDEX' > freebayes.pbspro
-
-# check jobs completion
-find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus"
-
-# save read groups to file
-
-
-# After successful creation of the jobs
-NCMDS=$( wc -l $FB.cmds | gawk '{print $1}')
-NJOBS=$(( NCMDS/NCORES/3 + 1  ))
-FB_JOB=$( qsub -J1-$NJOBS -N ${FB:0:11}  -vCMDS_FILE=$FB.cmds freebayes.pbspro ) # 5270639[1-4] completed successfully (the rest needed more processing time)
-FB_JOB_ID=$( echo $FB_JOB | egrep -o "[0-9]{7}")
-
-CONCAT_FB=$( echo "cd $( pwd ) ; cat *.o$FB_JOB_ID* | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_isolates_haplo_ind.bt2.fb.vcf; sambamba view -H all_ind.csorted.combined.bam | grep '^@RG' > ind_read_groups.txt" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=10:00:00 -N FB_vcf -W depend=afterok:$FB_JOB_ID[] -m e -M i.bar@griffith.edu.au)
-CONCAT_FB_ID=$( echo $CONCAT_FB | egrep -o "[0-9]{7}" )
-
-# find and remove empty files
-find . -size 0 -exec rm {} +
-
-# check jobs completion
-find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus"
-
-# check for success/failure of FB commands
-tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==1' > $FB.failed.cmds
-tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==0' > $FB.successful.cmds
-rm $FB.cmds.p*.*
-
-# Produce vcf stats
-SAMPLES=$( cut -f6 ind_read_groups.txt | gawk -F":" -vORS="," '{print $2}' | sed 's/,$//' )
-FB_STATS=$( echo "cd $( pwd ) ; mkdir ${FB}_stats; bcftools stats -F $GENOME.fasta -s $SAMPLES A_rabiei_2018_isolates_haplo_ind.bt2.fb.vcf > ${FB}_stats/A_rabiei_2018_isolates_haplo_ind.bt2.fb.vcf.stats; plot-vcfstats -p ${FB}_stats ${FB}_stats/A_rabiei_2018_isolates_haplo_ind.bt2.fb.vcf.stats" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=10:00:00 -N FB_vcfstats -W depend=afterok:$CONCAT_FB_ID -m e -M i.bar@griffith.edu.au)
-FB_STATS_ID=$( echo $FB_STATS | egrep -o "[0-9]{7}" )
-
-# find and remove empty files
-find . -size 0 -exec rm {} +
-
-```
-
-#### VCF filtering
-Variants were filtered using `r fontFmt("SnpSift")` v4.3.1 [@ruden_using_2012], based on their total loci depth, keeping ony SNP loci with at least 100 reads covering the locus (DP$\ge 100$) and not more than 20000 (based on EDA). In addition, each isolate genotype call was removed (recoded as `./.`) if it had read depth <5.
-```{bash vcf_filter}
-# Recode genotypes as missing if below a certain threshold, such as genotyping quality or depth (GQ:DP)  
-# filter only polymorphic SNPs, using QUAL>20, DP<36000/20000
-QUAL=10
-MAX_DP=20000
-MIN_DP=20
-# filter individual vcf
-SnpSift filter "( QUAL>$QUAL ) & ( TYPE='snp' ) & ( DP<$MAX_DP ) & ( DP>$MIN_DP ) & ( countRef()>=1 & countVariant()>=1 )" A_rabiei_2018_isolates_haplo_ind.bt2.fb.vcf | SnpSift gtfilter -gv './.' "( DP<5 )" > A_rabiei_2018_isolates_haplo_ind.bt2.fb.Qual${QUAL}.U${DP}DP.poly.snps.vcf
-# filter combined BAM vcf
-SnpSift filter "( QUAL>$QUAL ) & ( TYPE='snp' ) & ( DP<$DP ) & ( DP>$MIN_DP )& ( countRef()>=1 & countVariant()>=1 )" A_rabiei_2018_isolates_haplo.fb.vcf | SnpSift gtfilter -gv './.' "( DP<5 )" > A_rabiei_2018_isolates_haplo.Qual${QUAL}.U${DP}DP.poly.snps.vcf
-
-# make tfam file
-SnpSift vcf2tped -onlySnp A_rabiei_2018_isolates.tfam A_rabiei_2018_isolates_haplo.Qual20.U20kDP.poly.snps.vcf A_rabiei_2018_isolates # A_rabiei_on_me14_DP_filtered 
-```
 
 
 ### Variant Annotation

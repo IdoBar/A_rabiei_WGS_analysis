@@ -4,4 +4,5 @@
 .Ruserdata
 output/
 var_data/
+lib/
 *~*

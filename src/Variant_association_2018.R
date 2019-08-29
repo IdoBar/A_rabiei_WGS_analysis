@@ -17,8 +17,8 @@ pacman::p_load(char=CRAN_packages)
 #### Read data files ####
 # Read sample metadata and save to file
 analysis_basename="A_rabiei_2018"
-variant_method <- "haplo.bt2.fb"
-analysis_folder <- "../FB_vars_07_04_2019"
+variant_method <- "snippy_multi"
+analysis_folder <- "../Snippy_multi_17_07_2019/"
 analysis_outdir <- glue("./output/{variant_method}/")
 # read isolate information from excel file
 haplotype_info <- readxl::read_excel("./sample_info/5_year_complete_SSR_db.xlsx", sheet = "Feb_2019") %>% dplyr::select(Region, Isolate=Ind, State, Collection_Year=Year, Haplotype)
@@ -38,39 +38,40 @@ assign_score <- function(path_level, host, scoring_mat=scoring_table){
 # define pathotypes
 path_levels <- c("Low","Medium","Moderate","High","Very High", "Extreme") %>% factor(., levels = .)
 # Load sample and mating-type tables
-# mat_table <-  readxl::read_excel("./sample_info/2017_A_rabiei_DNA_for_MT_PCR.xlsx",sheet = "Sheet1") %>% 
-#   dplyr::select(Isolate=Sample_name, MAT1_2=`MAT Amplified`) %>% 
-#   left_join(readxl::read_excel("./sample_info/2017_A_rabiei_DNA_for_MT_PCR.xlsx",sheet = "11_04") %>% 
-#               dplyr::select(Isolate=Sample_name, MAT1_2b=`MAT Amplified2`)) %>% mutate(MAT_Type=if_else(MAT1_2=="Yes" | MAT1_2b=="Yes", "MAT1-2", "NA")) %>% 
-#   dplyr::select(Isolate, MAT_Type)
+mat_table <-  readxl::read_excel("./sample_info/2017_A_rabiei_DNA_for_MT_PCR.xlsx",sheet = "Sheet1") %>%
+  dplyr::select(Isolate=Sample_name, MAT1_2=Amplified) %>%
+  # left_join(readxl::read_excel("./sample_info/2017_A_rabiei_DNA_for_MT_PCR.xlsx",sheet = "11_04") %>%
+  #             dplyr::select(Isolate=Sample_name, MAT1_2b=`MAT Amplified2`)) %>% 
+  mutate(MAT_Type=if_else(MAT1_2=="Yes", "MAT1-2", "NA")) %>%
+  dplyr::select(Isolate, MAT_Type)
+
+samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", "Sequenced")  %>%
+  dplyr::select(-Haplotype, Host=`Host Cultivar`, Year=Collection_Year) %>%
+  mutate(Host=sub("PBA ", "", Host)) %>%
+  left_join(mat_table) %>%
+  left_join(haplotype_info %>% dplyr::select(Isolate, Haplotype)) %>%
+  mutate_at(scoring_set, ~str_replace_na(., "N/A")) %>%
+  mutate_if(is.character, ~str_replace_na(., "Unknown")) %>% mutate(Haplotype=str_replace(Haplotype, "Unknown", "TBD"))
 # 
-# samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", "Sequenced")  %>%
-#   dplyr::select(-Haplotype, Host=`Host Cultivar`, Year=Collection_Year) %>%
-#   mutate(Host=sub("PBA ", "", Host)) %>%
-#   left_join(mat_table) %>%
-#   left_join(haplotype_info %>% dplyr::select(Isolate, Haplotype)) %>%
-#   mutate_at(scoring_set, ~str_replace_na(., "N/A")) %>%
-#   mutate_if(is.character, ~str_replace_na(., "Unknown")) %>% mutate(Haplotype=str_replace(Haplotype, "Unknown", "TBD"))
-# 
-# samples_table$Pathogenicity <- rowSums(map_dfc(scoring_set, function(n) map_dbl(samples_table[[n]], ~assign_score(., n))))
-# samples_table <- samples_table %>% dplyr::select(-one_of(scoring_set)) %>%
-#   mutate(Pathotype=path_levels[Pathogenicity+1]) %>%
-#   write_xlsx(.,
-#              "./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",
-#              "sample_full_details", append=TRUE)
-samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", 
-                                    "sample_full_details")
+samples_table$Pathogenicity <- rowSums(map_dfc(scoring_set, function(n) map_dbl(samples_table[[n]], ~assign_score(., n))))
+samples_table <- samples_table %>% dplyr::select(-one_of(scoring_set)) %>%
+  mutate(Pathotype=path_levels[Pathogenicity+1]) %>%
+  write_xlsx(.,
+             "./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",
+             "sample_details_full")
+samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",
+                                    "sample_details_full")
   #,
-# add read numbers from the server 
-# read_stats <-   recent_file("raw_data/", ".+raw_reads.tsv") %>% read_tsv(., col_names = c("filename", "pair", "reads")) %>% 
-#     mutate(Sample_id=sub("_R[12].f.+q", "", filename)) 
-# 
+# add read numbers from the server
+# read_stats <-   recent_file("raw_data/", ".+raw_reads.tsv") %>% read_tsv(., col_names = c("filename", "pair", "reads")) %>%
+#     mutate(Sample_id=sub("_R[12].f.+q", "", filename))
+#
 # # Read mapping stats (after preparation by the markdown notebook)
-# mapping_stats <- recent_file(glue("{analysis_outdir}/results"), 
-#                              glue("{analysis_basename}.+mapping.stats.txt")) %>% read_tsv() %>% 
-#   inner_join(read_stats %>% group_by(Sample_id) %>% 
-#                summarise(paired_reads=mean(reads))) %>% 
-#   write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
+# mapping_stats <- recent_file(glue("{analysis_outdir}/results"),
+#                              glue("{analysis_basename}.+mapping.stats.txt")) %>% read_tsv() %>%
+#   inner_join(read_stats %>% group_by(Sample_id) %>%
+#                summarise(paired_reads=mean(reads))) %>%
+#   write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"),
 #                             "mapping_details")
 mapping_stats <- readxl::read_excel(glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), "mapping_details")
 # summarise stats per batch
@@ -80,7 +81,8 @@ mapping_summary <- mapping_stats %>%  group_by(Sequencing_Centre) %>%
               summarise(Coverage=sprintf("x%.2f", mean(Coverage)), 
                         Mapping_rate=mean(Mapping_rate), Mapping_qual=mean(Mapping_quality_mean), 
                         Total_paired_reads=sum(paired_reads)/1e6, Files=n()) %>% 
-  mutate(Bases=if_else(Sequencing_Centre=="Macrogen",Total_paired_reads/10, Total_paired_reads*15/100)) %>% 
+  mutate(Bases=if_else(Sequencing_Centre=="Macrogen",Total_paired_reads/10, 
+                       Total_paired_reads*15/100)) %>% 
 write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
            "batches_sum", append=TRUE)
 
@@ -119,6 +121,7 @@ sequenced_isolates <- mapping_stats %>% group_by(Isolate) %>%
 #### VCF EDA with vcfR ####
 # vcf_file <- recent_file("./data", glue::glue("{analysis_basename}.+.vcf"))
 vcf_file <- recent_file(analysis_folder, glue("{analysis_basename}_isolates_{variant_method}.Qual10.+poly.snps.vcf"))
+vcf_file <- file.path(analysis_folder, "core.vcf")
 vcf_basename <- tools::file_path_sans_ext(basename(vcf_file))
 vcf <- read.vcfR(vcf_file)
 # Whicvh sequenced isolates are not in the vcf file
@@ -129,199 +132,9 @@ sequenced_isolates %>% filter(!Isolate %in% colnames(extract.gt(vcf))) %>%
 # colnames(vcf@gt)[colnames(vcf@gt) %in% agrf_table$Submission_ID] <- agrf_dict[colnames(vcf@gt)[colnames(vcf@gt) %in% agrf_table$Submission_ID]]
 
 
-#### QA and EDA ####
-dp <- extract.gt(vcf, element='DP', as.numeric=TRUE)
-head(dp)
-
-# plot depth
-dpf <- reshape2::melt(dp, varnames=c('Index', 'Sample'), value.name = 'Depth', na.rm=TRUE)
-dpf <- dpf[ dpf$Depth > 0,]
-p <- ggplot(dpf, aes(x=Sample, y=Depth)) + geom_violin(fill="#C0C0C0", adjust=1.0,
-                                                       scale = "count", trim=TRUE)
-p + theme_bw() + theme(axis.title.x = element_blank(),
-               axis.text.x = element_text(angle = 60, hjust = 1, size=12)) +
-#  p <- p + stat_summary(fun.data=mean_sdl, mult=1, geom="pointrange", color="black")
-  scale_y_continuous(trans=scales::log2_trans(),
-                            breaks=c(1, 10, 100, 800),
-                            minor_breaks=c(1:10, 2:10*10, 2:8*100)) +
-  theme(axis.title.y = element_text(size=12), panel.grid.major.y=element_line(color = "#A9A9A9", size=0.6), panel.grid.minor.y=element_line(color = "#C0C0C0", size=0.2)) +
-  stat_summary(fun.y=median, geom="point", shape=23, size=2)
-ggsave(filename = filedate(glue::glue("{analysis_basename}_depth_dist"), ext = ".pdf", 
-                           outdir = glue("{analysis_outdir}/plots/")), width = 12, height = 8)
-
-
-# Check missingness within samples
-head(extract.gt(vcf))
-gt <- extract.gt(vcf)
-
-myMiss <- apply(gt, 2, function(x){ sum(is.na(x)) })
-percMiss <- myMiss*100/nrow(vcf)
-
-palette(brewer.pal(n=12, name = 'Set3'))
-
-par(mar = c(12,4,4,2))
-barplot(percMiss, las = 2, col = 1:12)
-title(ylab = "Missingness (%)")
-
-# Check allelic depth (minor/major<0.15)
-ad <- extract.gt(vcf, element = "AD", as.numeric = FALSE)
-check_ad <- function(allelic_depth, maf=0.15){
-  # allelic_depth=ad[1,9]
-  if (is.na(allelic_depth)) return(NA)
-  alleles <- as.numeric(unlist(str_split(allelic_depth, pattern = ",")))
-  minor_allele <- min(alleles)
-  major_allele <- max(alleles)
-  return(minor_allele/major_allele<maf)
-}
-
-# check maf in markers
-test <- apply(ad, 2, function(a) a %>% purrr::map_lgl(check_ad))
-sum(!test, na.rm = TRUE)
-# clear all calls where the maf is too high
-vcf@gt[,-1][ test == FALSE ] <- NA
-
-hist(markerMissRate, col = "#8DD3C7", xlab = "Missingness (%)")
-# clear depth that deviates from the quantiles (per sample)
-dp <- extract.gt(vcf, element = "DP", as.numeric=TRUE)
-# Visualise depth
-pdf(filedate(glue::glue("{analysis_basename}_depth_heatmap"), ext = ".pdf", 
-             outdir = glue("{analysis_outdir}/plots/")),
-    width = 12, height = 9)
-heatmap.bp(dp, rlabels = FALSE)
-dev.off()
-
-
-#### Filtration ####
-apply(dp, 2, function(d) max(d, na.rm = TRUE))
-# find outliers
-min_depth <- 10
-max_depth <- 500
-sample_outliers <- apply(dp, 2, function(d) sum(d>max_depth, na.rm = TRUE))
-# find markers with extremely high depth
-marker_outliers <- apply(dp, 1, function(d) sum(d>max_depth, na.rm = TRUE))
-marker_outliers[marker_outliers>1] 
-# find markers with extremely low depth
-marker_outliers <- apply(dp, 1, function(d) sum(d<min_depth, na.rm = TRUE))
-low_dp_markers <- marker_outliers[marker_outliers>20]
-
-
-
-
-# remove markers with low depth and high missing rate
-vcf <- vcf[marker_outliers<=20,]
-dp <- extract.gt(vcf, element = "DP", as.numeric=TRUE)
-# plotDP
-# Visualise depth
-pdf(filedate(glue::glue("{analysis_basename}_depth_heatmap_minDP_markers_removed"), 
-             ext = ".pdf", 
-             outdir = glue("{analysis_outdir}/plots/")),
-    width = 12, height = 9)
-heatmap.bp(dp, rlabels = FALSE)
-dev.off()
-
-# quants <- apply(dp, MARGIN=2, quantile, probs=c(0.05, 0.95), na.rm=TRUE)
-# dp2 <- sweep(dp, MARGIN=2, FUN = "-", quants[1,])
-# dp[dp2 < 0] <- NA
-# dp2 <- sweep(dp, MARGIN=2, FUN = "-", quants[2,])
-# dp[dp2 > 0] <- NA
-# clear depth by minimum
-dp[dp < min_depth] <- NA
-# clear depth by maximum
-dp[dp > max_depth] <- NA
-
-sum(is.na(dp))
-# clear all calls where the depth is too low or high
-vcf@gt[,-1][ is.na(dp) == TRUE ] <- NA
-
-
-
-# Remove missing markers with vcfR
-# Check missingness in genotypes
-# dp <- extract.gt(vcf, element = "DP", as.numeric=TRUE)
-#
-gt <- extract.gt(vcf)
-myMiss <- apply(gt, 2, function(x) sum(is.na(x)) )
-percMiss <- myMiss*100/nrow(vcf)
-# plot missingness
-palette(brewer.pal(n=12, name = 'Set3'))
-pdf(filedate(glue::glue("{analysis_basename}_missingness"), 
-             ext = ".pdf", 
-             outdir = glue("{analysis_outdir}/plots/")),
-    width = 12, height = 9)
-par(mar = c(12,4,4,2))
-barplot(percMiss, las = 2, col = 1:12)
-title(ylab = "Missingness (%)")
-dev.off()
-
-# Check missingness in markers
-markerMiss <- apply(gt, MARGIN = 1, function(x){ sum(is.na(x)) })
-markerMissRate <- markerMiss/ncol(vcf@gt[,-1])
-miss_thresh <- 0.25
-marker_missing <- markerMissRate[markerMissRate>miss_thresh]
-# remove markers with more than 25% missing 
-clean_vcf <- vcf[markerMissRate<miss_thresh,]
-hist(markerMissRate, col = "#8DD3C7", xlab = "Missingness (%)")
-write.vcf(clean_vcf, file = glue::glue("./output/data_files/{vcf_basename}.clean.vcf.gz"))
-
-
-#
-# filtered_vcf <- vcf[markerMissRate < 0.1, ]
-# # Save filtered file
-# write.vcf(filtered_vcf, "./output/A_rabiei_2018_35_isolates_DP_filt.recal.vcf")
-#
-# Visualise filtered set
-dp2 <- extract.gt(clean_vcf, element = "DP", as.numeric=TRUE)
-pdf(filedate(glue::glue("{analysis_basename}_filtered_heatmap"), 
-             ext = ".pdf", 
-             outdir = glue("{analysis_outdir}/plots/")),
-    width = 12, height = 9)
-heatmap.bp(dp2, rlabels = FALSE)
-dev.off()
-
-# custom filtration
-# source("./src/vcf_filtration.R")
-# snpsift_filtered_file <- recent_file(analysis_folder, glue("{analysis_basename}_isolates.+passed.snps.vcf"))
-# vcf_basename <- tools::file_path_sans_ext(basename(snpsift_filtered_file))
-# filtered_vcf_file <-  glue::glue("./output/data_files/{vcf_basename}.poly.vcf")
-# vcf_tab_filt <- vcf_filtration(snpsift_filtered_file, miss_rates = seq(0.2,0.1, -0.05),
-#             geno_miss_rate=0.1, remove_hetero = FALSE, remove_multi_allele = FALSE, write_filtered_vcf = "", poly_only = TRUE)
-# 
-# 
-# clean_vcf_data <- read_tsv(filtered_vcf_file, comment = "##")
-# 
-# # Fix sample names
-# AGRF_samples <- which(colnames(vcf_tab_filt) %in% agrf_table$Submission_ID)
-# if (length(AGRF_samples)>0) colnames(vcf_tab_filt)[AGRF_samples] <- agrf_dict[colnames(vcf_tab_filt)[AGRF_samples]]
-
-
-# write filtered vcf to file (not needed if done through the function)
-# system2("grep", args=c("'^##'", vcf_file), stdout = filtered_vcf_file)
-# if (file.exists(filtered_vcf_file)) readr::write_tsv(vcf_tab_filt, filtered_vcf_file, append = TRUE, col_names = TRUE)
-
-
-# check error rates between replicate samples
-# source("./src/estimate_error_rates_vcf_files.R")
-# error_rates <- estimate_error_rates(filtered_vcf_file, grouping_suffix = "-[A-z]+$")
-# # read genome data
-# dna_file <- "../../A_rabiei_me14_short_names.fasta"
-# dna <- ape::read.dna(dna_file, format = "fasta")
-# gff_file <- "../../Arab_me14_short_names.gff"
-# gff <- read.table(gff_file, sep="\t", quote="")
-
-# chrom <- create.chromR(name="Supercontig", vcf=vcf, seq=dna, ann=gff, verbose=FALSE)
-# chrom <- proc.chromR(chrom, verbose = TRUE)
-#
-# head(chrom)
-# plot(chrom)
-# chromoqc(chrom, dp.alpha = 22)
-# chrom <- masker(vcf, min_QUAL=20, min_DP=150, max_DP=2000)
-# chrom <- proc.chromR(chrom, verbose = FALSE)
-# plot(chrom)
-
-
 #### Analysis ####
 # filtered_vcf <- read.vcfR(filtered_vcf_file)
-genind_obj <- vcfR2genind(clean_vcf)
+genind_obj <- vcfR2genind(vcf) # clean_vcf
 # output as tfam format
 sample_cols <- colnames(extract.gt(clean_vcf))
 tfam_table <- samples_table %>% filter(Isolate %in% sample_cols) %>% 
@@ -342,14 +155,15 @@ tfam_table <- samples_table %>% filter(Isolate %in% sample_cols) %>%
 #### Perform some EDA  ####
 # Convert to allele frequencies (manage missing data)
 X <- adegenet::tab(genind_obj, freq = TRUE, NA.method = "mean")
-pca1 <- ade4::dudi.pca(X, scale = FALSE, scannf = FALSE, nf = 4)
+pca1 <- ade4::dudi.pca(X, scale = FALSE, scannf = FALSE, nf = 20)
 
 pca_data <- pca1$li %>% rownames_to_column("Isolate")  %>%
-  inner_join(sequenced_isolates) %>% 
+  inner_join(samples_table) %>% # sequenced_isolates
   mutate(seq_fontface=if_else(Sequenced=="Illumina", "plain", "bold"),
-         Pathotype=factor(Pathotype, levels=path_levels),
-         Coverage=round(Coverage, 2)) %>% 
-  left_join(sequencing_table %>% filter(Sequencing_Centre=="Macrogen") %>% dplyr::select(Isolate, Sequencing_Centre)) %>% 
+         Pathotype=factor(Pathotype, levels=path_levels)) %>% #,
+         # Coverage=round(Coverage, 2)) %>%
+  left_join(sequencing_table %>% filter(Sequencing_Centre=="Macrogen") %>% 
+  dplyr::select(Isolate, Sequencing_Centre)) %>% 
   mutate(Sequencing_Centre=if_else(is.na(Sequencing_Centre), "AG", Sequencing_Centre)) %>% 
   arrange(Year)
 
@@ -376,7 +190,7 @@ seq_face <- setNames(c("bold", "plain"),unique(pca_data$Sequenced))
 
 shapes <- c(21:25)
 # Isolate to annotate
-outliers <- pca_data %>% filter(abs(Axis2) > 2.5) %>% .[,"Isolate"]
+outliers <- pca_data %>% filter(Axis2 > 2.5 | Axis1 > 2.5) %>% .[,"Isolate"]
 # outliers <- pca_data %>% filter(grepl("PacBio", Sequenced, ignore.case = TRUE)) %>% .[,"Isolate"]
 # outliers <- c("16CUR017", "TR9543", "TR9529", "15CUR003") # PacBio-sequenced
 # outliers <- pca_data$Isolate
@@ -390,14 +204,17 @@ p <- ggplot(pca_data, aes(x=Axis1, y=Axis2, fill=Pathotype,
                           shape=Host)) # Host
 # Plot and add labels (represent component variance as a percentage)
 p + geom_point(alpha = 0.8, size=5) + # , stroke = 1
-  # geom_text_repel(aes(colour=Sequenced, label=Isolate, fontface=seq_fontface), show.legend = FALSE,size=3.5, point.padding = 0.75) +
-  geom_text_repel(aes(label=if_else(Isolate %in% outliers, glue("{Isolate} ({Year})"), ""), colour=adjustcolor( c("dodgerblue3"), alpha.f = 0.8)),
+  # geom_text_repel(aes(colour=Sequenced, label=Isolate, fontface=seq_fontface),
+  # show.legend = FALSE,size=3.5, point.padding = 0.75) +
+  geom_text_repel(aes(label=if_else(Isolate %in% outliers, glue("{Isolate} ({Year})"), ""),
+                      colour=Sequenced, fontface=seq_fontface),
+                      # colour=adjustcolor( c("dodgerblue3"), alpha.f = 0.8)),
               show.legend = FALSE, size=3.5, point.padding = 0.75) +
   # scale_color_() +
   scale_fill_brewer(palette = "RdYlGn", direction = -1) + 
   # scale_fill_manual(values = pal, aesthetics = c("fill")) + 
   scale_shape_manual(values = shapes) +
-  scale_color_manual(values=adjustcolor( seq_cols[1], alpha.f = 0.8)) +
+  scale_color_manual(values=adjustcolor( seq_cols, alpha.f = 0.8)) + # [1]
   # scale_size_continuous(range = c(4,7)) +
   guides(shape = guide_legend(override.aes = list(size = 5, fill=path_cols[2]), order = 1),
          fill = guide_legend(override.aes = list(size = 5, pch=shapes[1]), order = 2) ,size = guide_legend(override.aes = list(fill=path_cols[2], pch=shapes[1]), order = 3)) +
@@ -409,7 +226,7 @@ p + geom_point(alpha = 0.8, size=5) + # , stroke = 1
   labs( x=glue("C1: {round(percentVar[1]*100,2)}% variance"),
        y=glue("C2: {round(percentVar[2]*100,2)}% variance"))
 # Save plot to a pdf file
-ggsave(filedate(glue::glue("{analysis_basename}_PCA_yearSize_hostShape_pathoFill_labelsYear_PC1-2"),
+ggsave(filedate(glue::glue("{analysis_basename}_PCA_hostShape_pathoFill_labelsOutliers_PC1-2"),
                 ext = ".pdf", outdir = glue("{analysis_outdir}/plots"),
                 dateformat = FALSE), width = 8.5, height=6.5)
 #### PCA plot 1-2 biological2 ####
@@ -441,7 +258,7 @@ p + geom_point(alpha = 0.8) + # , size=5, stroke = 1
   labs( x=glue("C1: {round(percentVar[1]*100,2)}% variance"),
         y=glue("C2: {round(percentVar[2]*100,2)}% variance"))
 # Save plot to a pdf file
-ggsave(filedate(glue::glue("{analysis_basename}_PCA_yearSize_stateShape_haplooFill_PC1-2"),
+ggsave(filedate(glue::glue("{analysis_basename}_PCA_yearSize_stateShape_haploFill_PC1-2"),
                 ext = ".pdf", outdir = glue("{analysis_outdir}/plots"),
                 dateformat = FALSE), width = 9, height=7)
 #### PC3-4 plot ####
@@ -454,7 +271,8 @@ p <- ggplot(pca_data, aes(x=Axis3, y=Axis4, fill= State,
 # Plot and add labels (represent component variance as a percentage)
 p + geom_point(alpha = 0.8, size=5) + # , stroke = 1
   # geom_text_repel(aes(colour=Sequenced, label=if_else(Isolate %in% outliers, Isolate, ""), fontface=seq_fontface), show.legend = FALSE,size=3.5, point.padding = 0.75) +
-  geom_text_repel(aes(label=if_else(Isolate %in% outliers, glue("{Isolate} ({Year})"), ""), colour=adjustcolor( c("dodgerblue3"), alpha.f = 0.8)),
+  geom_text_repel(aes(label=if_else(Isolate %in% outliers, glue("{Isolate} ({Year})"), ""), 
+                      colour=adjustcolor( c("dodgerblue3"), alpha.f = 0.8)),
               show.legend = FALSE, size=3.5, point.padding = 0.75) +
   # scale_color_() +
   scale_fill_brewer(palette = "Set1", direction = 1) + 
@@ -472,7 +290,7 @@ p + geom_point(alpha = 0.8, size=5) + # , stroke = 1
   labs( x=glue("C3: {round(percentVar[3]*100,2)}% variance"),
        y=glue("C4: {round(percentVar[4]*100,2)}% variance"))
 # Save plot to a pdf file
-ggsave(filedate(glue::glue("{analysis_basename}_PCA_host_patho_labelsyear_PC3-4"),
+ggsave(filedate(glue::glue("{analysis_basename}_PCA_host_state_labelsyear_PC3-4"),
                 ext = ".pdf", outdir = glue("{analysis_outdir}/plots"),
                 dateformat = FALSE), width = 8.5, height=7)
 
@@ -482,9 +300,9 @@ ggsave(filedate(glue::glue("{analysis_basename}_PCA_host_patho_labelsyear_PC3-4"
 # Colors - Haplotype (diverged), State (diverged), Pathotype (RdYlGn)
 # Size - Pathogenicity
 # Create the plot for C1 and C2
-p <- ggplot(pca_data, aes(x=Axis1, y=Axis2, fill=GC_percentage, 
-                          size=Coverage,
-                          shape=Sequencing_Centre)) # Host
+p <- ggplot(pca_data, aes(x=Axis1, y=Axis2, 
+                          # fill=GC_percentage, size=Coverage,
+                          shape=Sequencing_Centre, fill=Sequencing_Centre)) # Host
 # Plot and add labels (represent component variance as a percentage)
 p + geom_point(alpha = 0.8)+ #, size=5) + # , stroke = 1
   # geom_text_repel(aes(colour=Sequenced, label=Isolate, fontface=seq_fontface), show.legend = FALSE,size=3.5, point.padding = 0.75) +
@@ -496,7 +314,7 @@ p + geom_point(alpha = 0.8)+ #, size=5) + # , stroke = 1
   # scale_fill_manual(values = pal, aesthetics = c("fill")) + 
   scale_shape_manual(values = shapes) +
   scale_color_manual(values=seq_cols) +
-  scale_size_continuous(range = c(3.5,6.5)) +
+  # scale_size_continuous(range = c(3.5,6.5)) +
   guides(shape = guide_legend(override.aes = list(size = 5, fill=path_cols[2]), order = 1, title = "Seq.Centre"),
          fill = guide_legend(override.aes = list(size = 5, pch=shapes[1]), order = 2, title = "GC (%)") ,
          size = guide_legend(override.aes = list(fill=path_cols[2], pch=shapes[1]), order = 3)) +
@@ -543,16 +361,18 @@ save.image(filedate(glue("{analysis_basename}_PCA_plots"), ext = ".RData", glue(
 # head(clean_snps@gtdata@snpnames)
 
 #### GAPIT analysis ####
+BiocManager::install("snpStats")
 pacman::p_load(char = c("multtest", "gplots", "LDheatmap", "genetics", "EMMREML", 
                         "scatterplot3d", "compiler"))
 source("http://zzlab.net/GAPIT/gapit_functions.txt")
 source("http://zzlab.net/GAPIT/emma.txt")
 options(stringsAsFactors = FALSE)
 # prepare phenotypic data
-pheno_data <- sequenced_isolates %>% as.data.frame(., stringsAsFactors = FALSE) %>% 
+pheno_data <- samples_table %>% as.data.frame(., stringsAsFactors = FALSE) %>% 
   dplyr::select(Taxa=Isolate, Pathogenicity, Year) # , Host, Haplotype, State
 
 # Create HapMap genotypic file
+clean_vcf <- vcf
 GT_data <- extract.gt(clean_vcf, return.alleles = TRUE) %>% data.frame(.) %>% 
   setNames(., colnames(clean_vcf@gt)[-1])
 # GT_data[GT_data==1] <- 2
@@ -587,7 +407,7 @@ myGAPIT <- GAPIT(Y=pheno_data,G = GT_hapmap ,PCA.total=8, Model.selection = TRUE
                  Inter.Plot=TRUE,                                      # perform interactive plot
                  Multiple_analysis=TRUE,                               # perform multiple analysis
                  PCA.3d=TRUE,                                          # plot 3d interactive PCA
-                 file.output=T)
+                 file.output=T, )
 
   
 #### SNPassoc analysis  ####
