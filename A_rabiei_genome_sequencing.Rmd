@@ -25,8 +25,10 @@ csl: style/springer-basic-improved-author-date-with-italic-et-al-period.csl
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
+# load custom functions from github
+devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "util.R")
 # options(width = 180)
-cran_packages <- c("tidyverse", "knitr", "pander", "captioner", "DT", "circlize", "htmltab")
+cran_packages <- c("tidyverse", "knitr", "pander", "captioner", "DT", "circlize", "htmltab", "paletteer")
 pacman::p_load(char=cran_packages, repos="https://cran.rstudio.com/")
 # Connect to Zotero to access references
 # biblio <- ReadBib("data/Fungal_genomes.bib") # , "bibtex", "RefManageR"
@@ -464,8 +466,8 @@ include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
 ```
 
 #### Assess genome size and ploidy
-The sequencing data of 2 isolates with sufficient coverage and no contamination (Macrogen batch DON001, AgriVic batch 7_S40) were analyzed for their k-mer content (coverage and distribution) to estimate the genome size and ploidy of the genome.
-k-mer counting and genome ploidy and size estimation were performed with `kmercountexact.sh` (from BBMap v38.34, see [SeqAnsewes thread](http://seqanswers.com/forums/showthread.php?t=64086)).  
+The sequencing data of 2 isolates with sufficient coverage and no contamination were analyzed for their k-mer content (coverage and distribution) to estimate the genome size and ploidy of the genome. The selected samples were samples DON001 (Macrogen batch), 7_S40 (AgriVic batch) and AGRF_11 (AGRF batch), see coverage details in `r tbls(name="mapping_rates",display="cite")`.  
+k-mer counting and genome ploidy and size estimation were performed with `kmercountexact.sh` (from BBMap v38.34, using the odd numbers in the range of 21-37 as kmers, i.e 21, 23, 25..35, 37 (see [SeqAnsewes thread](http://seqanswers.com/forums/showthread.php?t=64086)).  
 Similar analysis can be performed by Jellyfish (see [tutorial](http://koke.asrc.kanazawa-u.ac.jp/HOWTO/kmer-genomesize.html))
 ```{bash kmer_analysis}
 
@@ -511,18 +513,35 @@ rm *.tmp
 find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus" #  *m.e$JOB_ID.*
 
 # aggregate data from all output files (and transpose)
-cat ${SAMPLE}_peaks_k21.txt | grep "^#" | head -n -1 | sed "s/#//" | cat <( printf "sample\t%s\n" $SAMPLE) - | cut -f1 | paste -s > kmer_peaks_summary.txt
 
 SAMPLES=(DON001 7_S40 AGRF_11)
-for SAMPLE in "${SAMPLES[@]}"; do 
-  ls -1 ${SAMPLE}_khist*.txt | parallel "tail -n +2 {} | gawk -v sample=$SAMPLE '{printf "%s\t$0", sample}'" >> kmer_peaks_summary.txt
-done
+cat ${SAMPLES[0]}_peaks_k21.txt | grep "^#" | head -n -1 | sed "s/#//" | cat <( printf "sample\t%s\n" $SAMPLE) - | cut -f1 | paste -s > kmer_peaks_summary.txt
+parallel "grep "^#" {1}_peaks_k{2}.txt | head -n -1 | sed "s/#//" | cat  <(echo {1}) - | cut -f2 | paste -s" ::: ${SAMPLES[@]} ::: $(seq 21 2 37)
+# for SAMPLE in "${SAMPLES[@]}"; do
+#  ls -1 ${SAMPLE}_peaks*.txt | parallel "grep "^#" {} | head -n -1 | sed "s/#//" | cat  <(echo $SAMPLE) - | cut -f2 | paste -s" >> kmer_peaks_summary.tst
+#  done
+
 # do the same for the hist data (maybe with gawk)
- gawk 'NR==1{printf "sample\tkmer\t%s\n", $0}' ${SAMPLE}_khist_k21.txt >  khist_summary.txt
- parallel "tail -n +2 {1}_khist_k{2}.txt | gawk '{print \"{1}\t{2}\t\"\$0}'" ::: ${SAMPLES[@]} ::: $(seq 21 2 37) >> khist_summary.txt
+gawk 'NR==1{printf "Sample\tkmer\t%s\n", $0}' ${SAMPLES[0]}_khist_k21.txt | sed "s/#//"  >  khist_summary.txt
+parallel "tail -n +2 {1}_khist_k{2}.txt | gawk '{print \"{1}\t{2}\t\"\$0}'" ::: ${SAMPLES[@]} ::: $(seq 21 2 37) >> khist_summary.txt
 
 # Done!
 
+```
+
+The resulting kmer count data for all samples and kmers was aggregated into tables and summarised in the following plots
+
+``` {r kmer_analysis, eval=TRUE, echo=FALSE}
+kmer_hist <- read_tsv("raw_data/khist_summary.txt") %>% 
+  set_names(., c("Sample", "kmer", "Depth", "Count", "logScale"))
+# limit range (ignore unique kmers with very low depth)
+plot_hist <- kmer_hist %>% filter(Depth<200, Depth>2)
+
+# plot for each kmer
+ggplot(plot_hist, mapping = aes(x=Depth, y=Count, colour=Sample)) + scale_y_continuous(labels = comma) +
+  geom_line(size=1) + scale_color_paletteer_d(awtools, mpalette) + # RColorBrewer, Set1
+  facet_wrap(vars(kmer)) + plot_theme()
+kmer_peaks <- read_tsv("raw_data/kmer_peaks_summary.txt")
 ```
 
 ### Variant Call
