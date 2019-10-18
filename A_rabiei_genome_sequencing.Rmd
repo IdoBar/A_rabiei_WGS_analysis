@@ -466,7 +466,7 @@ include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
 ```
 
 #### Assess genome size and ploidy
-The sequencing data of 2 isolates with sufficient coverage and no contamination were analyzed for their k-mer content (coverage and distribution) to estimate the genome size and ploidy of the genome. The selected samples were samples DON001 (Macrogen batch), 7_S40 (AgriVic batch) and AGRF_11 (AGRF batch), see coverage details in `r tbls(name="mapping_rates",display="cite")`.  
+The sequencing data of 2 isolates with sufficient coverage and no contamination were analyzed for their k-mer content (coverage and distribution) to estimate the genome size and ploidy of the genome. The selected samples were DON001 (isolate 15DON001, Macrogen batch), 7_S40 (isolate F16253-1, AgriVic batch) and AGRF_11 (isolate F17191-1, AGRF batch), see coverage details in `r tbls(name="mapping_rates",display="cite")`.  
 k-mer counting and genome ploidy and size estimation were performed with `kmercountexact.sh` (from BBMap v38.34, using the odd numbers in the range of 21-37 as kmers, i.e 21, 23, 25..35, 37 (see [SeqAnsewes thread](http://seqanswers.com/forums/showthread.php?t=64086)).  
 Similar analysis can be performed by Jellyfish (see [tutorial](http://koke.asrc.kanazawa-u.ac.jp/HOWTO/kmer-genomesize.html))
 ```{bash kmer_analysis}
@@ -529,18 +529,20 @@ parallel "tail -n +2 {1}_khist_k{2}.txt | gawk '{print \"{1}\t{2}\t\"\$0}'" ::: 
 
 ```
 
-The resulting kmer count data for all samples and kmers was aggregated into tables and summarised in the following plots
+The resulting kmer count data for all samples and kmers was aggregated into tables and summarised in the following plot.  
+The single peak observed by the k-mer analysis predicted that _A. rabiei_ genome is haploid, with a genome size of approximately 42 Mbp, with slight variation due to the coverage depth of the sample, regardless of the chosen k-mer length. The lower depth of coverage of sample AGRF_11 led to inflated genome size prediction.
 
-``` {r kmer_analysis, eval=TRUE, echo=FALSE}
+``` {r kmer_plot, eval=TRUE, echo=FALSE}
 kmer_hist <- read_tsv("raw_data/khist_summary.txt") %>% 
   set_names(., c("Sample", "kmer", "Depth", "Count", "logScale"))
 # limit range (ignore unique kmers with very low depth)
 plot_hist <- kmer_hist %>% filter(Depth<200, Depth>2)
 
 # plot for each kmer
-ggplot(plot_hist, mapping = aes(x=Depth, y=Count, colour=Sample)) + scale_y_continuous(labels = comma) +
+ggplot(plot_hist, mapping = aes(x=Depth, y=Count, colour=factor(kmer))) + scale_y_continuous(labels = scales::comma) +
   geom_line(size=1) + scale_color_paletteer_d(awtools, mpalette) + # RColorBrewer, Set1
-  facet_wrap(vars(kmer)) + plot_theme()
+  facet_wrap(vars(Sample)) + plot_theme() + labs(colour="K-mer")
+ggsave("output/")
 kmer_peaks <- read_tsv("raw_data/kmer_peaks_summary.txt")
 ```
 
