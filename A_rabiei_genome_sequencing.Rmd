@@ -24,6 +24,7 @@ csl: style/springer-basic-improved-author-date-with-italic-et-al-period.csl
 ---
 
 ```{r setup, include=FALSE}
+devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "util.R")
 knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
 # options(width = 180)
 cran_packages <- c("tidyverse", "knitr", "pander", "captioner", "DT", "circlize", "htmltab")
@@ -137,7 +138,7 @@ Raw files quality after adaptor trimming was assessed with `r fontFmt("FastQC")`
 
 ### Mapping to the reference genome and calling variants (using Snippy)
 The trimmed reads were mapped to the _A. rabiei_ reference genome, strain Me14 ([GCA_004011695.1](https://www.ncbi.nlm.nih.gov/assembly/GCA_004011695.1)) using `r fontFmt("Snippy")` v4.4.0. [Snippy](https://github.com/tseemann/snippy) is a wrapper that makes use of popular bioinformatics tools, such as `r fontFmt("bwa-mem")` v0.7.17-r1188 to map the reads to the reference genome, followed by several commands of `r fontFmt("samtools")` v1.9 to specify a Read Group for each sample (provided to Snippy with the `--rgid` flag), mark duplicates and convert the alignments into coordinate-sorted, indexed BAM files.  
-The alignment files are then processed by `r fontFmt("Freebayes")` v1.3 to call variants from all samples and `r fontFmt("bcftools")` v1.9 and `r fontFmt("snpEff")` v4.3 to filter and annotate the variants and retain only high-quality variants (based on minimum depth and genotype quality thresholds) that are common to all samples and referred to as "core SNPs".  
+The alignment files are then processed by `r fontFmt("Freebayes")` v1.3.1 to call variants from all samples and `r fontFmt("bcftools")` v1.9 and `r fontFmt("snpEff")` v4.3 to filter and annotate the variants and retain only high-quality variants (based on minimum depth and genotype quality thresholds) that are common to all samples and referred to as "core SNPs".  
 Mapping statistics were obtained with `r fontFmt("Qualimap")` v.2.2.2-dev [@okonechnikov_qualimap_2016] and consolidated along with pre and post-trimming QC measures into a single, interactive report for each batch using `r fontFmt("MultiQC")` v1.7 [@ewels_multiqc:_2016]. 
 
 ```{bash snippy}
