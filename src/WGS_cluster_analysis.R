@@ -2,7 +2,7 @@ devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "util.R")
 
 # CRAN_packages <- c("tidyverse", "RColorBrewer", "ggrepel","GenABEL", "outliers", "SeqArray",
 #                    "SNPRelate","adegenet", "SNPassoc", "vcfR", "glue", "paletteer")
-CRAN_packages <- c("tidyverse","adegenet", "RColorBrewer",  "dendextend", "poppr",
+CRAN_packages <- c("tidyverse","adegenet", "RColorBrewer",  "dendextend", "poppr", "ComplexHeatmap",
                    "pvclust", "colorspace", "gplots", "paletteer", "pheatmap", "vcfR") # "GenABEL", "SNPRelate",
 pacman::p_load(char=CRAN_packages)
 
@@ -21,6 +21,11 @@ samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs
 # read isolate sequencing info
 sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",sheet = "submission_info") 
 
+# read DArT-based clustering
+dart_clusters <- readxl::read_excel("../../A_rabiei_DArT/output/A_rabiei_DArT_poppr.xlsx", 
+                                    "MLG_Cluster_table") %>%   select(-Pathotype)
+
+
 vcf_file <- file.path(analysis_folder, "core.vcf")
 vcf <- read.vcfR(vcf_file)
 clean_vcf <- vcf
@@ -29,14 +34,20 @@ sample_cols <- colnames(extract.gt(clean_vcf))
 genind_obj <- vcfR2genind(vcf) # clean_vcf
 ploidy(genind_obj) <- 1
 summary(genind_obj)
-# set state as population factor
-pop(genind_obj) <- samples_table$State[match(indNames(genind_obj), samples_table$Isolate)]
+
 samples_strata <- samples_table %>% slice(match(indNames(genind_obj), Isolate)) %>% 
-  dplyr::select(State, Year, Host, Pathogenicity) 
+  dplyr::select(Isolate, State, Year, Host, Pathogenicity) %>% 
+  left_join(dart_clusters, by=c("Isolate"="Ind")) %>% rename(GBS_cluster = Cluster_fact) #%>% 
+  # mutate_all(~replace_na(..1, "Unknown"))
+
 # Assign samples factors to Strata
-genind_obj@strata <- samples_strata %>% mutate(State=factor(State, levels = c("QLD", "NSW", "VIC", "SA")),
+genind_obj@strata <- samples_strata %>% as.data.frame() %>% 
+  mutate(State=factor(State, levels = c("QLD", "NSW", "VIC", "SA")),
                                                Year=factor(Year, levels = sort(unique(Year))),
-                                               Pathogenicity=factor(Pathogenicity, levels = sort(unique(Pathogenicity))))
+                             Pathogenicity=factor(Pathogenicity, levels = sort(unique(Pathogenicity))))
+# set state as population factor
+pop(genind_obj) <- genind_obj@strata$State
+# pop(genind_obj) <- samples_table$State[match(indNames(genind_obj), samples_table$Isolate)]
 
 str(strata(genind_obj))
 
@@ -172,32 +183,99 @@ add.scatter(myInset(patho_dapc$DAPC), posi="bottomleft",
             inset=c(0.01,-0.03), ratio=.25,
             bg=transp("white"))
 dev.off()
+# DAPC by GBS clusters
+strata_var <- "GBS_cluster"
+pal <- "category10_d3"
+cluster_dapc <- xvalDapc(tab(genind_obj, NA.method = "mean"), genind_obj@strata[[strata_var]],
+                      n.pca = pca_range, n.rep = reps,
+                      parallel="snow", ncpus=ncores)
+
+# save plot
+pdf(file = filedate(sprintf("%s_DAPC_%s_analysis", variant_method,  strata_var), 
+                    ".pdf", outdir = glue::glue("{analysis_outdir}/plots")), width = 7, height=6)
+scatter(cluster_dapc$DAPC,  cex = 2, legend = TRUE, pch=shapes, 
+        col = paletteer_d(glue::glue("{favourite_pals[[pal]]}::{pal}")), scree.da=FALSE, 
+        clabel = FALSE, posi.leg = "topright", scree.pca = FALSE, 
+        cleg = 0.85, xax = 1, yax = 2, inset.solid = 1)
+add.scatter(myInset(cluster_dapc$DAPC), posi="bottomleft",
+            inset=c(0.01,-0.01), ratio=.25,
+            bg=transp("white"))
+dev.off()
 
 save.image(filedate(sprintf("%s_DAPC_analysis", variant_method), 
                     ".RData", outdir = analysis_outdir))
-#### Clustering ####
+
+# Check if distance is different by cluster
+# calculate AMOVA (with clone correction)
+agc <- as.genclone(genind_obj)
+# agc@strata <- strata_factors %>% filter(id %in% indNames(agc)) %>% mutate_if(is.factor, ~fct_drop(.))
+amova.result <- poppr.amova(agc, ~GBS_cluster, clonecorrect = TRUE)
+amova.cc.test <- randtest(amova.result)
+plot(amova.cc.test)
+amova.cc.test$pvalue
+
+#### Manual Clustering ####
+# Heatmap ####
 # correct clone
-Arab_cc <- clonecorrect(genind_obj, strata = ~State/Year, keep = 1:2)
+Arab_cc <- clonecorrect(genind_obj, strata = NA)#, keep = 1:2)
 pop(gen_clone)
 # calculate distance
 Arab_cc.mat <- diss.dist(Arab_cc, mat = TRUE)
 Arab_cc.dist <- diss.dist(Arab_cc, mat = FALSE)
-heatmap_metadata <- data.frame(genind_obj@strata, row.names = sample_cols) %>% mutate(Host=factor(Host))
+heatmap_metadata <- genind_obj@strata %>% mutate_if(is.character, ~factor(replace_na(.x, "NA"))) %>% 
+column_to_rownames("Isolate")
+# data.frame(, row.names = sample_cols) %>% 
+   
 # row.names(heatmap_metadata) <- sample_cols
 # specify colours
-ann_colors = list(
-  State = setNames(paletteer_d(!!favourite_pals[3], !!names(favourite_pals[3]), n=4), 
-                   levels(heatmap_metadata$State)),
-  Host = setNames(paletteer_d(!!favourite_pals[4], !!names(favourite_pals[4]), n=4), 
-                  levels(heatmap_metadata$Host)),
-  Year = 
-)
+# ann_colors = list(
+#   State = setNames(paletteer_d(!!favourite_pals[3]::!!names(favourite_pals[3]), n=4), 
+#                    levels(heatmap_metadata$State)),
+#   Host = setNames(paletteer_d(!!favourite_pals[4]::!!names(favourite_pals[4]), n=4), 
+#                   levels(heatmap_metadata$Host)),
+#   Year = 
+# )
 
-pheatmap(Arab_cc.mat, annotation_col = heatmap_metadata[c("Host", "State")], cutree_rows = 2,
+# specify colours
+my_colours = list(
+  State = levels(heatmap_metadata$State) %>% 
+    setNames(as.character(paletteer_d("RColorBrewer::Set1", length(.))), .),
+  Year = levels(heatmap_metadata$Year) %>% 
+    setNames(as.character(paletteer_d("ggsci::default_uchicago", length(.))), .),
+  Pathogenicity = levels(heatmap_metadata$Pathogenicity) %>% 
+    setNames(as.character(paletteer_d("RColorBrewer::RdYlGn", length(.), direction = -1)), .),
+  Host = levels(heatmap_metadata$Host) %>% 
+    setNames(as.character(paletteer_d(glue::glue("{favourite_pals[4]}::{names(favourite_pals[4])}"), 
+                                           n=length(.))), .), 
+  GBS_cluster = levels(heatmap_metadata$GBS_cluster) %>% 
+  setNames(c(as.character(paletteer_d(glue::glue("{favourite_pals[2]}::{names(favourite_pals[2])}"),
+                                    n=length(.)-1)), "gray80"), .)
+)
+cluster_num <- 3
+
+Heatmap(Arab_cc.mat, col = paletteer_c("viridis::viridis", 50, direction = -1), name = "Genetic distance", 
+            )
+dist_heatmap <- pheatmap(Arab_cc.mat, show_rownames = FALSE, show_colnames = FALSE, 
+                         color = paletteer_c("viridis::viridis", 50, direction = -1), 
+                         annotation_colors = my_colours,
+                         # clustering_distance_rows = dist_matrix, clustering_distance_cols = dist_matrix,
+                         annotation_row = heatmap_metadata[c("State", "Year")], 
+                         annotation_col = heatmap_metadata[c("Host", "Pathogenicity", "GBS_cluster")], 
+                         cutree_rows = cluster_num, cutree_cols = cluster_num , 
+             # filename = glue("{analysis_outdir}/plots/A_rabiei_WGS_heatmap_{cluster_num}clusters.pdf"), 
+                         width = 8, height = 6.5)
+
+
+dist_heatmap <- pheatmap(Arab_cc.mat, annotation_col = heatmap_metadata[c("Host", "State")], cutree_rows = 2,
          cutree_cols = 2, annotation_colors = ann_colors,
          annotation_row = heatmap_metadata[c("Pathogenicity", "Year")])
 plot(hclust(Arab_cc.dist))
 # distgenEUCL <- dist(genind_obj, method = "euclidean", diag = FALSE, upper = FALSE, p = 2)
+
+
+
+
+
 
 # clustering with pvclust
 ibs.pv <- pvclust(Arab_cc.mat, nboot=500, parallel=TRUE, )
@@ -222,6 +300,10 @@ pca_data <- pca1$li %>% rownames_to_column("Isolate")  %>%
               dplyr::select(Isolate, Sequencing_Centre)) %>% 
   mutate(Sequencing_Centre=if_else(is.na(Sequencing_Centre), "AG", Sequencing_Centre)) %>% 
   arrange(Year)
+
+
+
+
 
 #### SNPRelate ####
 # set thresholds
