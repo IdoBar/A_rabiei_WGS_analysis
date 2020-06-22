@@ -4,22 +4,22 @@ devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "Util.R")
 #                "RJSONIO", "swfscMisc", "mapdata", "maps"))
 # install.deps(c("tidyverse/glue", "tidyverse/tidyselect", "thierrygosselin/radiator", "thierrygosselin/grur"), repo="git") # need to be run first, otherwise fails to re-install tidyverse packages if they're already loaded
 install.deps(c("thierrygosselin/radiator"), repo="git")
-CRAN_packages <- c("tidyverse", "RColorBrewer", "ggrepel","GenABEL", "adegenet", "SNPassoc")
+CRAN_packages <- c("tidyverse", "RColorBrewer", "ggrepel","GenABEL", "adegenet", "SNPassoc", "here")
 # install.packages("SNPassoc")
-install.deps(CRAN_packages)
+pacman::p_load(char = CRAN_packages)
 
 # install.deps("SNPassoc", repo = "bioc")
 # Download working version of SNPassoc from http://www.creal.cat/media/upload/arxius/jr/SNPassoc/SNPassoc_1.8-5.zip and copy to R library
-# Theme setup
-plot_theme <-  theme_grey(base_size=20) +
-  theme(axis.title.y=element_text(face="bold", vjust = 1.5, size=rel(0.8)),
-        axis.title.x=element_text(face="bold", vjust = 0.1, size=rel(0.8)),
-        legend.title=element_text(size=rel(0.8), hjust=0.5),
-        legend.text=element_text(size = rel(0.7),lineheight = 1.5),
-        #panel.grid.minor=element_blank(),
-        strip.text=element_text(size=rel(0.6)),
-        strip.switch.pad.grid = unit(0, "lines"),
-        strip.background=element_rect(fill = "lightskyblue"))#, colour = "black", size
+# # Theme setup
+# plot_theme <-  theme_grey(base_size=20) +
+#   theme(axis.title.y=element_text(face="bold", vjust = 1.5, size=rel(0.8)),
+#         axis.title.x=element_text(face="bold", vjust = 0.1, size=rel(0.8)),
+#         legend.title=element_text(size=rel(0.8), hjust=0.5),
+#         legend.text=element_text(size = rel(0.7),lineheight = 1.5),
+#         #panel.grid.minor=element_blank(),
+#         strip.text=element_text(size=rel(0.6)),
+#         strip.switch.pad.grid = unit(0, "lines"),
+#         strip.background=element_rect(fill = "lightskyblue"))#, colour = "black", size
 
 # Read sample metadata and save to file
 samples_table <- readxl::read_excel("data/P_rabiei_isolate_list_sent_for_sequencing.xlsx")
@@ -45,6 +45,7 @@ obj$tidier_data <- obj$tidy.data %>% mutate(MARKERS=sub("Arab_Me14_", "", MARKER
 #### Perform some EDA  ####
 # Convert to allele frequencies (manage missing data)
 X <- tab(genind_obj, freq = TRUE, NA.method = "mean")
+pca1 <- dudi.pca(X, scale = FALSE, scannf = TRUE)
 pca1 <- dudi.pca(X, scale = FALSE, scannf = FALSE, nf = 4)
 
 pca_data <- pca1$li %>% rownames_to_column(.)  %>% left_join(., strata, by = c( "rowname"= "INDIVIDUALS")) %>%
