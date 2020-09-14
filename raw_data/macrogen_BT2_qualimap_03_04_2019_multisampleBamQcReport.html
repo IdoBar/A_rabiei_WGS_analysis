@@ -1,0 +1,500 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<link rel="stylesheet" href="css/agogo.css" type="text/css" />
+		<link rel="stylesheet" href="css/report.css" type="text/css" />
+	<title>Qualimap report: Multi-sample BAM QC</title>
+
+	</head>
+<body>
+	<div class="header-wrapper">
+		<div class="header">
+		<p class="logo"><a href="http://qualimap.bioinfo.cipf.es/">
+		<img class="logo" src="css/qualimap_logo_small.png" alt="Logo"/>
+		</a></p>
+<div class="headertitle"><a href="">Qualimap Report: Multi-sample BAM QC</a></div>
+	</div>
+</div>
+
+<div class="content-wrapper">
+<div class="content">
+<div class="document">
+<div class="documentwrapper">
+<div class="bodywrapper">
+<div class="body">
+<div class=section>
+<h2>Input data and parameters<a class="headerlink" name="input" title="Permalink to this headline">&nbsp;</a></h2>
+<div class=summary>
+
+
+<div class=table-summary>
+<h3>Samples</h3>
+<table class="summary hovertable">
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>DON001</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/DON001_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>16CUR017</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/16CUR017_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>F16253-1</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/F16253-1_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>FT15030</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/FT15030_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>FT13092-2</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/FT13092-2_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>16CUR019</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/16CUR019_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>TR6400</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/TR6400_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>FT13092-4</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/FT13092-4_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>TR6417</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/TR6417_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>15DON007</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/15DON007_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>F15028</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/F15028_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>FT13092-6</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/FT13092-6_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>F15029</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/F15029_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>14DON003</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/14DON003_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>F15025</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/F15025_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>TR6408</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/TR6408_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>15CUR001</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/15CUR001_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>F15023</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/F15023_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>15CUR002</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/15CUR002_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>CUR003</td>
+<td class=column2>/export/home/s2978925/data/A_rabiei_sequencing/Macrogen_sequences_1702KHP-0164/macrogen_BT2_process_03_04_2019/CUR003_BT2_me14.dedup.rg.csorted_stats</td>
+</tr>
+</table>
+</div>
+
+</div>
+</div> <!-- summary section -->
+
+<div class=section>
+<h2>Summary<a class="headerlink" name="summary" title="Permalink to this headline">&nbsp;</a></h2>
+<div class=summary>
+
+
+<div class=table-summary>
+<h3>Globals</h3>
+<table class="summary hovertable">
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Number of samples</td>
+<td class=column2>20</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Total number of mapped reads</td>
+<td class=column2>656,793,285</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Mean samples coverage</td>
+<td class=column2>80.67</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Mean samples GC-content</td>
+<td class=column2>47.84</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Mean samples mapping quality</td>
+<td class=column2>36.32</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td class=column1>Mean samples insert size</td>
+<td class=column2>436.7</td>
+</tr>
+</table>
+</div>
+
+
+<div class=table-summary>
+<h3>Sample statistics</h3>
+<table class="summary hovertable">
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td><b>Sample name</b></td>
+<td><b>Coverage mean</b></td>
+<td><b>Coverage std</b></td>
+<td><b>GC percentage</b></td>
+<td><b>Mapping quality mean</b></td>
+<td><b>Insert size median</b></td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>14DON003</td>
+<td>76.0243</td>
+<td>56.3078</td>
+<td>47.69</td>
+<td>36.1721</td>
+<td>447.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>15CUR001</td>
+<td>89.4349</td>
+<td>41.3928</td>
+<td>47.31</td>
+<td>36.0812</td>
+<td>461.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>15CUR002</td>
+<td>90.4932</td>
+<td>66.5661</td>
+<td>48.1</td>
+<td>36.2614</td>
+<td>451.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>15DON007</td>
+<td>86.5634</td>
+<td>69.0519</td>
+<td>47.97</td>
+<td>36.3367</td>
+<td>429.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>16CUR017</td>
+<td>97.5047</td>
+<td>75.8444</td>
+<td>47.34</td>
+<td>36.3585</td>
+<td>434.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>16CUR019</td>
+<td>79.5086</td>
+<td>69.8157</td>
+<td>47.33</td>
+<td>36.4042</td>
+<td>423.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>CUR003</td>
+<td>40.4422</td>
+<td>36.9104</td>
+<td>47.73</td>
+<td>36.5775</td>
+<td>401.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>DON001</td>
+<td>98.5704</td>
+<td>72.0254</td>
+<td>48.32</td>
+<td>36.6068</td>
+<td>435.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>F15023</td>
+<td>0.0439</td>
+<td>0.2121</td>
+<td>48.51</td>
+<td>35.6218</td>
+<td>431.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>F15025</td>
+<td>104.5361</td>
+<td>71.0916</td>
+<td>47.79</td>
+<td>36.3225</td>
+<td>451.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>F15028</td>
+<td>77.9697</td>
+<td>49.0778</td>
+<td>47.86</td>
+<td>36.3797</td>
+<td>448.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>F15029</td>
+<td>85.0235</td>
+<td>52.8259</td>
+<td>48.04</td>
+<td>36.5496</td>
+<td>417.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>F16253-1</td>
+<td>74.6645</td>
+<td>53.7083</td>
+<td>47.53</td>
+<td>36.2995</td>
+<td>444.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>FT13092-2</td>
+<td>89.2723</td>
+<td>69.3558</td>
+<td>47.64</td>
+<td>36.3185</td>
+<td>435.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>FT13092-4</td>
+<td>77.5686</td>
+<td>69.425</td>
+<td>47.71</td>
+<td>36.2935</td>
+<td>438.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>FT13092-6</td>
+<td>86.0755</td>
+<td>69.9852</td>
+<td>47.53</td>
+<td>36.2941</td>
+<td>437.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>FT15030</td>
+<td>78.2099</td>
+<td>52.1213</td>
+<td>47.97</td>
+<td>36.3282</td>
+<td>442.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>TR6400</td>
+<td>81.6848</td>
+<td>62.749</td>
+<td>47.88</td>
+<td>36.2325</td>
+<td>449.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>TR6408</td>
+<td>89.2411</td>
+<td>55.5599</td>
+<td>48.31</td>
+<td>36.5335</td>
+<td>427.0</td>
+</tr>
+<tr onmouseover="this.style.backgroundColor='#EEEEEC';" onmouseout="this.style.backgroundColor='#FFFFFF';">
+<td>TR6417</td>
+<td>110.5843</td>
+<td>75.9578</td>
+<td>48.18</td>
+<td>36.4946</td>
+<td>434.0</td>
+</tr>
+</table>
+</div>
+
+</div>
+</div> <!-- summary section -->
+
+
+
+<div class=section>
+
+<h2>PCA<a class="headerlink" name="PCA" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/PCA.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Coverage Across Reference<a class="headerlink" name="Coverage across reference" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Coverage across reference.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Coverage Histogram (0 - 5297X)<a class="headerlink" name="Coverage Histogram (0 - 5297X)" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Coverage Histogram (0 - 5297X).png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Global Coverage Histogram<a class="headerlink" name="Global Coverage Histogram" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Global Coverage Histogram.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Genome Fraction Coverage<a class="headerlink" name="Genome Fraction Coverage" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Genome Fraction Coverage.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Duplication Rate Histogram<a class="headerlink" name="Duplication Rate Histogram" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Duplication Rate Histogram.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Mapped reads GC-content<a class="headerlink" name="Mapped reads GC-content" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Mapped reads GC-content.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Mapped Reads Clipping Profile<a class="headerlink" name="Mapped Reads Clipping Profile" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Mapped Reads Clipping Profile.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Mapped Reads GC-content Distribution<a class="headerlink" name="Mapped Reads GC-content Distribution" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Mapped Reads GC-content Distribution.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Mapping Quality Across Reference<a class="headerlink" name="Mapping Quality Across Reference" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Mapping Quality Across Reference.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Mapping Quality Histogram<a class="headerlink" name="Mapping Quality Histogram" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Mapping Quality Histogram.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Insert Size Across Reference<a class="headerlink" name="Insert Size Across Reference" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Insert Size Across Reference.png"></div>
+
+</div><!-- graph section -->
+
+
+<div class=section>
+
+<h2>Insert Size Histogram<a class="headerlink" name="Insert Size Histogram" title="Permalink to this headline">&nbsp;</a></h2>
+
+<div><img width=100% src="images_multisampleBamQcReport/Insert Size Histogram.png"></div>
+
+</div><!-- graph section -->
+
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+<div class="sidebar">
+<h3>Contents</h3>
+<li class="toctree-l1"><a class="reference internal" href="#input">Input data & parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#summary">Summary</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#PCA">PCA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Coverage across reference">Coverage Across Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Coverage Histogram (0 - 5297X)">Coverage Histogram (0 - 5297X)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Global Coverage Histogram">Global Coverage Histogram</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Genome Fraction Coverage">Genome Fraction Coverage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Duplication Rate Histogram">Duplication Rate Histogram</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Mapped reads GC-content">Mapped reads GC-content</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Mapped Reads Clipping Profile">Mapped Reads Clipping Profile</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Mapped Reads GC-content Distribution">Mapped Reads GC-content Distribution</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Mapping Quality Across Reference">Mapping Quality Across Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Mapping Quality Histogram">Mapping Quality Histogram</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Insert Size Across Reference">Insert Size Across Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#Insert Size Histogram">Insert Size Histogram</a></li>
+</div> <!-- sidebar -->
+
+<div class="clearer"></div>
+</div>
+
+</div>
+
+
+<div class="footer-wrapper">
+<div class="footer">
+<div class="left">
+<div class="footer">
+2019/04/04 14:55:48
+</div>
+</div>
+<div class="right">
+<div class="footer">
+Generated by QualiMap v.2.2.2-dev
+</div
+</div>
+<div class="clearer"></div>
+</div> <!-- footer -->
+</div>
+</body>

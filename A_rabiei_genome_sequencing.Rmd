@@ -28,7 +28,7 @@ knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
 # load custom functions from github
 devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "util.R")
 # options(width = 180)
-cran_packages <- c("tidyverse", "knitr", "pander", "captioner", "DT", "circlize", "htmltab", "paletteer")
+cran_packages <- c("tidyverse", "knitr", "pander", "captioner", "DT", "circlize", "htmltab", "paletteer", "here")
 pacman::p_load(char=cran_packages, repos="https://cran.rstudio.com/")
 # Connect to Zotero to access references
 # biblio <- ReadBib("data/Fungal_genomes.bib") # , "bibtex", "RefManageR"
@@ -50,26 +50,17 @@ fontFmt = function(x,font="consolas"){
 figs <- captioner(prefix="Figure")
 tbls <- captioner(prefix="Table")
 tbls(name="samples","Ascochyta rabiei isolates used for DNA sequencing.")
-tbls(name="tfam","PLINK's .tfam file format.")
+# tbls(name="tfam","PLINK's .tfam file format.")
 tbls(name="mapping_rates", "Mapping rates of the WGS reads to the Ascochyta rabiei Me14 reference genome.")
 tbls(name="mapping_sum", "Mapping statistics for 2017 and 2018 sequencing batches.")
-figs(name="GC_cont", "GC (%) content in trimmed WGS reads.")
-isolate_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", sheet = "Sequenced")
-sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", sheet = "submission_info") 
+# figs(name="GC_cont", "GC (%) content in trimmed WGS reads.")
+figs(name="kmer_peaks", "A. rabiei genome ploidy and size estimation based on k-mer analysis.")
+isolate_table <- readxl::read_excel(here("sample_info/A_rabiei_isolate_list_for_wgs.xlsx"), 
+                                    sheet = "Sequenced")
+sequencing_table <- readxl::read_excel(here("sample_info/A_rabiei_isolate_list_for_wgs.xlsx"), 
+                                       sheet = "submission_info") 
 sequencing_dict <- set_names(sequencing_table$Isolate, sequencing_table$Submission_id)
 samples_table <- isolate_table %>% arrange(desc(Pathogenicity), desc(Collection_Year), Site)
-
-#readxl::read_excel("../P_rabiei_isolate_list_for_wgs.xlsx", sheet = "Sequenced") %>%
-  # filter(!is.na(Sequenced))  %>% inner_join(isolate_table) %>%
-  # mutate(Collection_Year=as.character(isolate_table$Year[match(Isolate, isolate_table$isolate_name)]),
-  #        Collection_Year=if_else(!is.na(Collection_Year), Collection_Year, 
-  #                         paste0("20", sub("[A-Z]*(\\d{2}).+", "\\1", Isolate)))) %>%
-  # dplyr::select(Isolate, Site, State, Collection_Year, Rating, Pathogenicity,Haplotype) %>%
-   # %>% write_csv("isolate_list_WGS_2018.csv")
-# xlsx::write.xlsx(as.data.frame(samples_table))
-tfam_table <- samples_table  %>% dplyr::select(State, Isolate) %>%
-  mutate(V3=0, V4=0, V5=0, V6=-9)
-#figs(name="WtFreq1","Weight frequency of Ruffe captured in 1992.")
 
 ```
 
@@ -125,8 +116,8 @@ easy_install -U pdfx
 Adaptors needed to be removed, as well as very low quality bases/reads, so trimming was performed with BBduk (from BBMap v38.34). See official download page on [SourceForge](https://sourceforge.net/projects/bbmap/), [user guide](http://jgi.doe.gov/data-and-tools/bbtools/bb-tools-user-guide/bbduk-guide/) and [SEQanswers thread](http://seqanswers.com/forums/showthread.php?t=42776).  
 
 ### Mapping to the reference genome (using Bowtie2)
-The trimmed reads were mapped to the _A. rabiei_ reference genome, strain Me14 [@verma_draft_2016] using Bowtie2 (version 2.3.4.3) with the `--very-sensitive` option in `--end-to-end` (global) mode. The resulting SAM files were processed to mark duplicates with SAMBLASTER v0.1.24 [@faust_samblaster:_2014] and converted into coordinate-sorted, indexed BAM files with read groups using [Picard v2.18.22](https://broadinstitute.github.io/picard/).     
-Raw files quality after adaptor trimming was assessed with `r fontFmt("FastQC")` (v0.11.8). Post-trimming and mapping statistics were consolidated into a single, interactive report for each batch using `r fontFmt("MultiQC")` v1.0 [@ewels_multiqc:_2016]
+The trimmed reads were mapped to the _A. rabiei_ reference genome, strain Me14, NCBI Accession [GCA_004011695.1](https://www.ncbi.nlm.nih.gov/assembly/GCA_004011695.1/) [@shahReferenceGenomeAssembly2020] using `r fontFmt("Bowtie2")` v2.3.4.3 with the `--very-sensitive` option in `--end-to-end` (global) mode [@langmeadFastGappedreadAlignment2012]. The resulting SAM files were processed to mark duplicates with `r fontFmt("SAMBLASTER")` v0.1.24 [@faust_samblaster:_2014] and converted into coordinate-sorted, indexed BAM files with read groups using [Picard v2.18.22](https://broadinstitute.github.io/picard/). Mapping statistics (rate, quality and coverage) were evaluated with `r fontFmt("Qualimap 2")` v.2.2.2-dev [@okonechnikov_qualimap_2016].       
+Raw files quality after adaptor trimming was assessed with `r fontFmt("FastQC")` v0.11.8 [@andrewsFASTQCQualityControl2014]. Post-trimming and mapping statistics were consolidated into a single, interactive report for each batch using `r fontFmt("MultiQC")` v1.0 [@ewels_multiqc:_2016]. Files of samples that did not pass the quality thresholds of 20% mapping rate and x15 coverage were discarded from the rest of the analysis.  
 
 #### Macrogen batch
 The report from Macrogen was parsed to extract the links and download all the relevant `.fastq.gz` and `.xlsx` files.  
@@ -375,12 +366,12 @@ find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStat
 
 
 #### Contaminations in Macrogen samples
-Both the initial QC and the mapping results show that there was a contamination in the DNA samples of at least three isolates: 16CUR019, 15CUR003, FT15023. This conclusion was obvious from the different GC content signatures of the three isolates (`r figs(name="GC_cont",display="cite")`) compared with the other isolates and from the low mapping rates of these isolates to the _A. rabiei_ reference genome (see bottom of `r tbls(name="mapping_rates",display="cite")`).  
+Both the initial QC and the mapping results show that there was a contamination in the DNA samples of at least three isolates: 16CUR019, 15CUR003, FT15023. This conclusion was obvious from the different GC content signatures of the three isolates (figure not shown) compared with the other isolates and from the low mapping rates of these isolates to the _A. rabiei_ reference genome (see bottom of `r tbls(name="mapping_rates",display="cite")`).  
 FT15023 in particular hardly contained any reads mappable to the _A. rabiei_ reference genome (<0.1%).  
 A sub-sample of the raw reads from isolate FT15023 was matched against the NCBI nucleotide collection (nt) and identified the contamination as of bacterial origin (_Ochrobactrum pituitosum/pseudogrignonense_). 
 
 #### Contaminations in AGRF and AgriVic samples
-Both the initial QC and the mapping results show that there was a contamination in the DNA samples of at least three isolates: AGRF_05 (17CUR007), AGRF_08 (TR8102) and AGRF_18 (TR9573). This conclusion was obvious from the different GC content signatures of the three isolates (`r figs(name="GC_cont",display="cite")`) compared with the other isolates and from the mapping rates of these isolates to the _A. rabiei_ reference genome (see bottom of `r tbls(name="mapping_rates",display="cite")`).   
+Both the initial QC and the mapping results show that there was a contamination in the DNA samples of at least three isolates: AGRF_05 (17CUR007), AGRF_08 (TR8102) and AGRF_18 (TR9573). This conclusion was obvious from the different GC content signatures of the three isolates (figure not shown) compared with the other isolates and from the mapping rates of these isolates to the _A. rabiei_ reference genome (see bottom of `r tbls(name="mapping_rates",display="cite")`).   
 A sub-sample of the raw reads from isolate TR9573 was matched against the NCBI nucleotide collection (nt) and identified the contamination as of bacterial origin (*Stenotrophomonas maltophilia*).  
 Since similar contamination levels were found in the same samples in both the AGRF and AgriVic batches, it's likely that it had originated from our lab.  
 To further investigate the origin of the contamination, the reads that didn't map to the _A. rabiei_ genome will be clustered and deduplicated using `r fontFmt("clumpify.sh")` from the `r fontFmt("BBtools")` suite, as described in this [Biostars thread](https://www.biostars.org/p/277013/). The clustered reads will be used to construct "mini-assemblies" from the contaminated samples using `r fontFmt("Tadpole")` from the `r fontFmt("BBtools")` suite.  
@@ -388,23 +379,25 @@ The assembled contigs will be BLASTed against the nr NCBI database, with species
 
 Samples with less than 20% mapping and x15 coverage were removed from the rest of the analysis (see highlighted rows in `r tbls(name="mapping_rates",display="cite")`).  
 A comparison between the sequencing data and mapping statistics of both batches is provided in `r tbls(name="mapping_sum",display="cite")`.
-_To process mapping summary table, copy the `bbmap.stats` and `qualimap.html` files into `raw_data` folder_
+_To process mapping summary table, copy the `.stats` and `qualimap.html` files into `raw_data` folder_
 
-```{bash clumpify_unmapped}
+<!-- ```{bash clumpify_unmapped} -->
 
-```
+<!-- ``` -->
 
 
 ```{r mapping_table, eval=TRUE, echo=FALSE}
-analysis_folder <- "../BB_vars_26_02_2019"
-analysis_basename <- "A_rabiei_2018"
-variant_method <- "haplo.fb"
+#analysis_folder <- "../BB_vars_26_02_2019"
+analysis_basename <- "A_rabiei_BT2_Apr_2019"
+#variant_method <- "haplo.fb"
 # analysis_folder <- "../FB_vars_01_03_2019"
 # analysis_outdir <- glue("./output/{variant_method}/")
-
-mapping_table <- list.files(analysis_folder, ".bbmap.stats", full.names = TRUE) %>% map_df(read_tsv) %>% 
-  mutate_at(vars(contains("mapped")),  ~as.numeric(sub("%", "", ., fixed=TRUE))/100) %>%
-  mutate(Mapping_rate=rowMeans(.[,-1]), Mapping_tool = "BBmap (v38.22)", 
+alignment_method <- "BT2"
+mapping_table <- list.files(here("raw_data"), glue::glue(".*{alignment_method}.+.stats"), full.names = TRUE) %>%
+                              map_df(read_tsv) %>% 
+  # mutate_at(vars(contains("mapped")),  ~as.numeric(sub("%", "", ., fixed=TRUE))/100) %>%
+  mutate(Mapping_rate=as.numeric(sub("%", "", mapping_rate, fixed=TRUE))/100, 
+         Mapping_tool = "Bowtie2 (v2.3.4.3)", # Bowtie2 (version 2.3.4.3)
          Sample_id=str_extract(.$sample_id, paste(sequencing_table$Submission_id, collapse = "|"))) %>%
   group_by(Sample_id, Mapping_tool) %>%
   summarise(Mapping_rate=mean(Mapping_rate)) %>% ungroup() %>% 
@@ -414,8 +407,8 @@ mapping_table <- list.files(analysis_folder, ".bbmap.stats", full.names = TRUE) 
 
 # Load qualimap statistics (copy summary html files to raw_data folder)
 
-qualimap_files <- list.files(analysis_folder, "multisampleBamQcReport.html", full.names = TRUE, 
-                             recursive = TRUE)
+qualimap_files <- list.files(here("raw_data"), glue::glue(".*{alignment_method}.+multisampleBamQcReport.html"), 
+                             full.names = TRUE,  recursive = TRUE)
 exclude_columns <- c("Coverage std", "Insert size median")
   # mutate(`Pathog. Group`=samples_table$Pathogenicity[match(samples_table$Isolate, .$Isolate)] ) 
 qualimap_results <-  qualimap_files %>% map_df(~htmltab(., which = "//td/b[text() = 'Sample name']/ancestor::table")) %>% 
@@ -425,7 +418,8 @@ qualimap_results <-  qualimap_files %>% map_df(~htmltab(., which = "//td/b[text(
   left_join(., mapping_table) %>% 
   arrange(Isolate, desc(Coverage)) %>% set_names(., gsub(" ", "_", colnames(.))) %>%
   dplyr::select(Isolate, GC_percentage, Mapping_quality_mean, Mapping_rate, Coverage, Mapping_tool, Sample_id, Sequencing_Centre) %>%
-  write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.stats"), ".txt", "./output/results", dateformat = FALSE))
+  write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.stats"), ".txt",
+                     here("output/results"), dateformat = FALSE))
 
 # Summarise mapping results
 mapping_summary <- qualimap_results %>% filter(Coverage>20) %>% 
@@ -437,7 +431,8 @@ mapping_summary <- qualimap_results %>% filter(Coverage>20) %>%
   # mutate(Reads_per_file=format(c(2224642.64, 36500108.00), 
   #                              digits = 2, scientific = TRUE)) %>%
   arrange(desc(Sequencing_Centre)) %>% 
-  write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.sum"), ".txt", "./output/results", dateformat = FALSE))
+  write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.sum"), ".txt", 
+                     here("output/results"), dateformat = FALSE))
 
 ```
 
@@ -529,21 +524,38 @@ parallel "tail -n +2 {1}_khist_k{2}.txt | gawk '{print \"{1}\t{2}\t\"\$0}'" ::: 
 
 ```
 
-The resulting kmer count data for all samples and kmers was aggregated into tables and summarised in the following plot.  
+The resulting kmer count data for all samples and kmers was aggregated into tables and summarised in the following plot (`r figs(name="kmer_peaks", display="cite")`).  
 The single peak observed by the k-mer analysis predicted that _A. rabiei_ genome is haploid, with a genome size of approximately 42 Mbp, with slight variation due to the coverage depth of the sample, regardless of the chosen k-mer length. The lower depth of coverage of sample AGRF_11 led to inflated genome size prediction.
 
-``` {r kmer_plot, eval=TRUE, echo=FALSE}
+``` {r kmer_plot, eval=TRUE, echo=FALSE, fig.dim=c(7,10), fig.cap=figs(name="kmer_peaks")}
 kmer_hist <- read_tsv("raw_data/khist_summary.txt") %>% 
   set_names(., c("Sample", "kmer", "Depth", "Count", "logScale"))
-# limit range (ignore unique kmers with very low depth)
-plot_hist <- kmer_hist %>% filter(Depth<200, Depth>2)
+# kmer_hist %>% group_by(Sample) %>% slice(max(main_peak))
 
-# plot for each kmer
-ggplot(plot_hist, mapping = aes(x=Depth, y=Count, colour=factor(kmer))) + scale_y_continuous(labels = scales::comma) +
-  geom_line(size=1) + scale_color_paletteer_d(awtools, mpalette) + # RColorBrewer, Set1
-  facet_wrap(vars(Sample)) + plot_theme() + labs(colour="K-mer")
-ggsave("output/")
 kmer_peaks <- read_tsv("raw_data/kmer_peaks_summary.txt")
+# summarise peaks to calculate average predicted genome size and 
+peaks_summary <- kmer_peaks %>% group_by(sample) %>% rename(Sample=sample) %>% 
+  summarise(mean_genome_size=mean(genome_size),genome_size_SE=se(genome_size), max_cov=max(main_peak), 
+            ploidy=max(ploidy)) %>% 
+  arrange(max_cov) %>% mutate(Sample=forcats::fct_inorder(Sample), 
+                              genome_label=sprintf("%s\u2009bp (±%s)", scales::comma(mean_genome_size/1000), 
+                                           round(genome_size_SE, digits = 0)))
+# limit range (ignore unique kmers with very low depth)
+plot_hist <- kmer_hist %>% filter(Depth<200, Depth>2) %>% 
+  mutate(kmer=factor(kmer), Sample=factor(Sample, levels = levels(peaks_summary$Sample)))#, kmer==31) #  
+
+# filter(k==31) %>% rename(Sample=sample)
+
+# plot for each kmer (check out the following to support UniCODE characters: https://stackoverflow.com/questions/12768176/unicode-characters-in-ggplot2-pdf-output) , thin space: \u2009
+ggplot(plot_hist, mapping = aes(x=Depth, y=Count, colour=kmer)) + 
+  scale_y_continuous(labels = scales::comma) +
+  geom_line(size=1) + scale_color_paletteer_d("pals::tol") + # ggsci, default_aaas; RColorBrewer, Set1; awtools, mpalette
+  facet_wrap(vars(Sample), ncol = 1) + plot_theme() + 
+  geom_text(aes(x=15, y=2.0e6, 
+                label=sprintf("Predicted ploidy=%sn\nGenome size=%s(±%s) Kbp", ploidy, 
+                              scales::comma(mean_genome_size/1000), round(genome_size_SE/1000, digits = 1))),  
+                        # format(genome_size, scientific = TRUE, digits = 3))) / comma(genome_size)
+            data=peaks_summary, hjust=0, colour="black", size=5)
 ```
 
 ### Variant Call
@@ -792,58 +804,7 @@ Association between variants and pathogenicity levels was identified by `r fontF
 
 
 
-## Alternative analyses
-
-## Appendix 1. Additional analyses (not used)
-#### Genotype Imputation
-The resulting SNPs were used as a basis for imputation to try and infer missing genotypes by assessing linkage between markers and fixed haplotypes.  
-Several methods were tested:
-1. Imputation was performed with `r fontFmt("LinkImpute", custom_font)` [@money_linkimpute:_2015], using a KNNi algorithm, as implemented in `r fontFmt("TASSEL", custom_font)` v5.2.40 [@glaubitz_tassel-gbs:_2014]. 
-2. With `r fontFmt("LinkImputeR", custom_font)` v1.1.1 [@money_linkimputer:_2017], using an improved KNNi algorithm.  
-
-```{bash vcf_linkimputer}
-# Genotype imputation with LinkImputeR
-alias LinkImputeR='java -jar /c/Bioinformatics/Tools/linkimputer/LinkImputeR.jar'
-# edit `accuracy.ini` and modify input file name and other parameters:
-[Input]
-filename = ../A_rabiei_on_me14_DP_GQ_corr.bt2.fb.snps.vcf
-save = A_rabiei_on_me14_DP_GQ_corr.bt2.fb.snps.filtered.vcf
-maxdepth = 200
-
-[InputFilters]
-maf=0.001
-positionmissing = 0.6
-hw=0.05
-
-[Global]
-depth = 5
-
-[CaseFilters]
-missing = 0.6,0.7,0.8,0.9
-maf=0.001, 0.01,0.05,0.1,0.15,0.2
-
-[Accuracy]
-numbermasked = 5000
-# Create a folder for the statistics
-mkdir Linkimputer_stats
-# Run LinkImputeR to assess accuracy (doesn't seem to be working on Windows)
-LinkImputeR -s accuracy.ini
-# Impute genotypes
-LinkImputeR Linkimpute2.xml 'Case 10' gstacks_case4.imputed.vcf # Miss=0.7, MAF=0.05, Samples=20, Markers=1134
-LinkImputeR Linkimpute2.xml 'Case 18' gstacks_case18.imputed.vcf # Miss=0.4, MAF=0.2, Samples=130, Markers=11422
-
-# Fix error in field annotation
-sed -i.bak 's/ID=UG/ID=OG/g' gstacks_case18.imputed.vcf
-sed -i.bak 's/ID=UG/ID=OG/g' gstacks_case4.imputed.vcf
-
-```
-
-After filtration, the `.vcf` file was converted to `r fontFmt("PLINK")`'s `.tped` format. In order to export to `r fontFmt("PLINK")` format, a `.tfam` file was created, which contains a table like `r tbls(name="tfam",display="cite")` (without the header line).
-```{r tfam_table, eval=TRUE} 
-pander(as.data.frame(head(tfam_table)), caption=tbls("tfam"), justify="left")
-```
-
-## Appendix 2. Useful resources
+## Appendix 1. Useful resources
 
 * Whole-Genome Comparison of _Aspergillus fumigatus_ Strains Serially Isolated from Patients with Aspergillosis. [@hagiwara_whole-genome_2014]:
 
