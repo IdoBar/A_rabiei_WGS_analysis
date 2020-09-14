@@ -116,7 +116,7 @@ Install needed software in a `conda` environment on Gowonda2.
 conda install -n snippy -c conda-forge -c bioconda snippy sra-tools bcbio-gff libgd xorg-libxpm libpng  libjpeg-turbo jpeg libtiff 
 # Clean extra space
 conda clean -y --all
-capnm git://github.com/IdoBar/XML-DOM-XPath-0.14@patch1
+cpanm git://github.com/IdoBar/XML-DOM-XPath-0.14@patch1
 cpanm --force Bio::SeqIO
 # Install pdfx to parse the report and download the files, see https://stackoverflow.com/a/33173484
 easy_install -U pdfx

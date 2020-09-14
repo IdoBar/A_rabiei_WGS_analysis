@@ -6,7 +6,8 @@ devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "util.R")
 devtools::install_version("GenABEL.data",version="1.0.0")
 devtools::install_version("GenABEL",version="1.8-0")
 devtools::install_bitbucket(repo = "bucklerlab/rtassel", ref = "master")
-CRAN_packages <- c("tidyverse", "RColorBrewer", "ggrepel","GenABEL", "outliers", "adegenet", "SNPassoc", "vcfR", "glue", "paletteer")
+CRAN_packages <- c("tidyverse", "RColorBrewer", "ggrepel","GenABEL", "outliers", "adegenet", "SNPassoc", "vcfR", 
+                   "glue", "paletteer", "here")
 pacman::p_load(char=CRAN_packages)
 # install.packages("SNPassoc")
 # install.deps(CRAN_packages)
@@ -21,7 +22,8 @@ variant_method <- "snippy_multi"
 analysis_folder <- "../Snippy_multi_17_07_2019/"
 analysis_outdir <- glue("./output/{variant_method}/")
 # read isolate information from excel file
-haplotype_info <- readxl::read_excel("./sample_info/5_year_complete_SSR_db.xlsx", sheet = "Feb_2019") %>% dplyr::select(Region, Isolate=Ind, State, Collection_Year=Year, Haplotype)
+haplotype_info <- readxl::read_excel("./sample_info/5_year_complete_SSR_db.xlsx", sheet = "Feb_2019") %>% 
+  dplyr::select(Region, Isolate=Ind, State, Collection_Year=Year, Haplotype)
 # read isolate sequencing info
 sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",sheet = "submission_info") 
 # create a dictionarty for sample-isolate 
@@ -37,6 +39,8 @@ assign_score <- function(path_level, host, scoring_mat=scoring_table){
 
 # define pathotypes
 path_levels <- c("Low","Medium","Moderate","High","Very High", "Extreme") %>% factor(., levels = .)
+  
+path_groups <- setNames(paste0("Group", 0:5), levels(path_levels))
 # Load sample and mating-type tables
 mat_table <-  readxl::read_excel("./sample_info/2017_A_rabiei_DNA_for_MT_PCR.xlsx",sheet = "Sheet1") %>%
   dplyr::select(Isolate=Sample_name, MAT1_2=Amplified) %>%
@@ -55,27 +59,33 @@ samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs
 # 
 samples_table$Pathogenicity <- rowSums(map_dfc(scoring_set, function(n) map_dbl(samples_table[[n]], ~assign_score(., n))))
 samples_table <- samples_table %>% dplyr::select(-one_of(scoring_set)) %>%
-  mutate(Pathotype=path_levels[Pathogenicity+1]) %>%
+  mutate(Pathotype=path_levels[Pathogenicity+1], Patho.Group=paste0("Group",Pathogenicity)) %>%
   write_xlsx(.,
              "./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",
-             "sample_details_full")
+             "sample_details_full", overwritesheet = TRUE)
 samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",
                                     "sample_details_full")
   #,
 # add read numbers from the server
-# read_stats <-   recent_file("raw_data/", ".+raw_reads.tsv") %>% read_tsv(., col_names = c("filename", "pair", "reads")) %>%
-#     mutate(Sample_id=sub("_R[12].f.+q", "", filename))
-#
-# # Read mapping stats (after preparation by the markdown notebook)
-# mapping_stats <- recent_file(glue("{analysis_outdir}/results"),
-#                              glue("{analysis_basename}.+mapping.stats.txt")) %>% read_tsv() %>%
-#   inner_join(read_stats %>% group_by(Sample_id) %>%
+read_stats <-   recent_file("raw_data/", ".+raw_reads.tsv") %>% read_tsv(., col_names = c("filename", "pair", "reads")) %>%
+    mutate(Sample_id=sub("_R[12].f.+q", "", filename)) #%>% mutate(Isolate=sequencing_dict[Sample_id])
+
+# Read mapping stats (after preparation by the markdown notebook)
+# mapping_stats <- recent_file("raw_data/",
+#                              glue("{analysis_basename}.+mapping.stats.txt")) %>% read_csv() %>%
+#   inner_join(read_stats %>% group_by(Isolate) %>%
 #                summarise(paired_reads=mean(reads))) %>%
-#   write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"),
+#   write_xlsx(., glue("{analysis_outdir}/{analysis_basename}_mapping.xlsx"),
 #                             "mapping_details")
-mapping_stats <- readxl::read_excel(glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), "mapping_details")
+mapping_stats_outfile <- recent_file("output/results//",
+                            glue("A_rabiei_2018.+mapping.stats.xlsx"))
+mapping_stats <- mapping_stats_outfile %>% 
+  readxl::read_excel(., "sequencing_stats") %>% #  "mapping_details"
+  inner_join(read_stats %>% group_by(Sample_id) %>%
+               summarise(paired_reads=mean(reads)))
+
 # summarise stats per batch
-# mapping_summary <- recent_file(glue("{analysis_outdir}/results"), 
+# mapping_summary <- recent_file(glue("{analysis_outdir}"), 
 #                                glue("{analysis_basename}.+mapping.sum.txt")) %>%  read_tsv() %>% 
 mapping_summary <- mapping_stats %>%  group_by(Sequencing_Centre) %>% 
               summarise(Coverage=sprintf("x%.2f", mean(Coverage)), 
@@ -83,16 +93,16 @@ mapping_summary <- mapping_stats %>%  group_by(Sequencing_Centre) %>%
                         Total_paired_reads=sum(paired_reads)/1e6, Files=n()) %>% 
   mutate(Bases=if_else(Sequencing_Centre=="Macrogen",Total_paired_reads/10, 
                        Total_paired_reads*15/100)) %>% 
-write_xlsx(., glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
-           "batches_sum", append=TRUE)
+write_xlsx(., mapping_stats_outfile, 
+           "batches_sum", overwritesheet = TRUE)
 
 # combine stats from multiple sequencing samples/batches per isolate
 sequenced_isolates <- mapping_stats %>% group_by(Isolate) %>% 
   summarise(GC_percentage=mean(GC_percentage), 
             Mapping_quality_mean=mean(Mapping_quality_mean), 
             Coverage=sum(Coverage)) %>% inner_join(samples_table, .) %>% 
-  write_xlsx(.,  glue("{analysis_outdir}/results/{analysis_basename}_mapping.xlsx"), 
-             "mapping_per_sample", append=TRUE)
+  write_xlsx(.,  mapping_stats_outfile, 
+             "mapping_per_sample")
 
 
 # mapping_summary <- mapping_stats %>% filter(Coverage>20) %>%
@@ -124,7 +134,7 @@ vcf_file <- recent_file(analysis_folder, glue("{analysis_basename}_isolates_{var
 vcf_file <- file.path(analysis_folder, "core.vcf")
 vcf_basename <- tools::file_path_sans_ext(basename(vcf_file))
 vcf <- read.vcfR(vcf_file)
-# Whicvh sequenced isolates are not in the vcf file
+# Which sequenced isolates are not in the vcf file
 sequenced_isolates %>% filter(!Isolate %in% colnames(extract.gt(vcf))) %>% 
   dplyr::select(Isolate)
 
@@ -153,18 +163,26 @@ tfam_table <- samples_table %>% filter(Isolate %in% sample_cols) %>%
 # genind_obj <- obj$genind.no.imputation
 
 #### Perform some EDA  ####
+samples_factors <- samples_table %>% mutate(State=factor(State, levels = c("QLD", "NSW", "VIC", "SA", "WA")),
+  # Year=factor(Year, levels=as.character(min(Year, na.rm = TRUE):max(Year, na.rm = TRUE))),
+  # Host=fct_relevel(fct_infreq(fct_lump_min(Host, min=6)), "Other", after = Inf),
+  # Haplotype=fct_relevel(fct_infreq(fct_lump_min(Haplotype, min=2)), "Other", after = Inf),
+  Patho.Group=factor(Patho.Group, levels=paste0("Group", 0:5))) %>%
+  mutate_at(vars(Host, Haplotype, Patho.Group), ~fct_explicit_na(., na_level = "Unknown"))
+
 # Convert to allele frequencies (manage missing data)
 X <- adegenet::tab(genind_obj, freq = TRUE, NA.method = "mean")
 pca1 <- ade4::dudi.pca(X, scale = FALSE, scannf = FALSE, nf = 20)
 
 pca_data <- pca1$li %>% rownames_to_column("Isolate")  %>%
-  inner_join(samples_table) %>% # sequenced_isolates
-  mutate(seq_fontface=if_else(Sequenced=="Illumina", "plain", "bold"),
-         Pathotype=factor(Pathotype, levels=path_levels)) %>% #,
+  inner_join(samples_factors) %>% # sequenced_isolates
+  mutate(seq_fontface=if_else(Sequenced=="Illumina", "plain", "bold")) %>% 
+         # Pathotype=factor(Pathotype, levels=path_levels)) %>% #,
          # Coverage=round(Coverage, 2)) %>%
   left_join(sequencing_table %>% filter(Sequencing_Centre=="Macrogen") %>% 
   dplyr::select(Isolate, Sequencing_Centre)) %>% 
   mutate(Sequencing_Centre=if_else(is.na(Sequencing_Centre), "AG", Sequencing_Centre)) %>% 
+  left_join(sequenced_isolates %>% dplyr::select(Isolate, GC_percentage, Mapping_quality_mean, Coverage )) %>% 
   arrange(Year)
 
   # mutate(Pathotype=factor(STRATA, levels=path_levels)Host)
@@ -178,19 +196,28 @@ pca_var <- pca1$li %>% summarise_at(vars(starts_with("Axis")), var)
 # Calculate the percentage of each component of the total variance
 percentVar <- pca_var/sum(pca_var)
 # Define colour palette, but get rid of the awful yellow - number 6
+my_colours = list(
+  State = levels(pca_data$State) %>% setNames(as.character(paletteer_d("RColorBrewer::Set1", length(.))), .),
+  Year = sort(unique(pca_data$Year)) %>% setNames(as.character(paletteer_d("ggsci::default_uchicago", length(.))), .),
+  Patho.Group = levels(pca_data$Patho.Group) %>% 
+    setNames(as.character(paletteer_d("RColorBrewer::RdYlGn", direction = -1))[round(seq(4,11, length.out = length(.)) ,0)], .),
+  Haplotype = levels(pca_data$Haplotype) %>% setNames(as.character(paletteer_d("RColorBrewer::Dark2", length(.))), .)
+)
+
+
 pal <- brewer.pal(9, "Set1")
 pal2 <- brewer.pal(8, "Dark2")
 
 
 # path_guide <- tibble(path_levels, col=pal[c(3,2,5,1,4)], size=seq(2,4,length.out = 5))
 # path_sizes <- setNames(seq(2,4,length.out = 5), path_levels)
-path_cols <- setNames(pal[c(3,2,5,1,4,9)], path_levels)
+path_cols <- my_colours$Patho.Group# setNames(pal[c(3,2,5,1,4,9)], path_levels)
 seq_cols <- adjustcolor( c("grey15", "dodgerblue3"), alpha.f = 0.8)
 seq_face <- setNames(c("bold", "plain"),unique(pca_data$Sequenced))
 
 shapes <- c(21:25)
 # Isolate to annotate
-outliers <- pca_data %>% filter(Axis2 > 2.5 | Axis1 > 2.5) %>% .[,"Isolate"]
+
 # outliers <- pca_data %>% filter(grepl("PacBio", Sequenced, ignore.case = TRUE)) %>% .[,"Isolate"]
 # outliers <- c("16CUR017", "TR9543", "TR9529", "15CUR003") # PacBio-sequenced
 # outliers <- pca_data$Isolate
@@ -198,12 +225,18 @@ outliers <- pca_data %>% filter(Axis2 > 2.5 | Axis1 > 2.5) %>% .[,"Isolate"]
 # shape - Year, Seq.Provider, Host (State)
 # Colors - Haplotype (diverged), State (diverged), Pathotype (RdYlGn)
 # Size - Pathogenicity
+
 # Create the plot for C1 and C2
-p <- ggplot(pca_data, aes(x=Axis1, y=Axis2, fill=Pathotype, 
-                          # size=Year,
-                          shape=Host)) # Host
+# Create the plot for C1 and C2
+plot_comps <- 1:2
+plot_axes <- paste0("Axis", plot_comps)
+outliers <- pca_data %>% filter(abs(!!sym(plot_axes[2])) > 2.5 | abs(!!sym(plot_axes[1])) > 2.5) %>% .[,"Isolate"]
+ggplot(pca_data, aes(x=!!sym(plot_axes[1]), y=!!sym(plot_axes[2]), fill=Patho.Group, shape=Host)) + 
+# p <- ggplot(pca_data, aes(x=Axis1, y=Axis2, fill=Pathotype, 
+#                           # size=Year,
+#                           shape=Host)) # Host
 # Plot and add labels (represent component variance as a percentage)
-p + geom_point(alpha = 0.8, size=5) + # , stroke = 1
+  geom_point(alpha = 0.8, size=5) + # , stroke = 1
   # geom_text_repel(aes(colour=Sequenced, label=Isolate, fontface=seq_fontface),
   # show.legend = FALSE,size=3.5, point.padding = 0.75) +
   geom_text_repel(aes(label=if_else(Isolate %in% outliers, glue("{Isolate} ({Year})"), ""),
@@ -211,30 +244,33 @@ p + geom_point(alpha = 0.8, size=5) + # , stroke = 1
                       # colour=adjustcolor( c("dodgerblue3"), alpha.f = 0.8)),
               show.legend = FALSE, size=3.5, point.padding = 0.75) +
   # scale_color_() +
-  scale_fill_brewer(palette = "RdYlGn", direction = -1) + 
+  scale_fill_manual(values = my_colours$Patho.Group) + 
+  # scale_fill_brewer(palette = "RdYlGn", direction = -1) + 
   # scale_fill_manual(values = pal, aesthetics = c("fill")) + 
   scale_shape_manual(values = shapes) +
   scale_color_manual(values=adjustcolor( seq_cols, alpha.f = 0.8)) + # [1]
   # scale_size_continuous(range = c(4,7)) +
-  guides(shape = guide_legend(override.aes = list(size = 5, fill=path_cols[2]), order = 1),
-         fill = guide_legend(override.aes = list(size = 5, pch=shapes[1]), order = 2) ,size = guide_legend(override.aes = list(fill=path_cols[2], pch=shapes[1]), order = 3)) +
+  guides(shape = guide_legend(override.aes = list(size = 5, fill=pal[2]), order = 1),
+         fill = guide_legend(override.aes = list(size = 5, pch=shapes[1]), order = 2) ,
+         size = guide_legend(override.aes = list(fill=pal[2], pch=shapes[1]), order = 3)) +
   #  +
   # scale_size_manual(values = path_sizes[pca_data$Pathogenicity]) +
   
   # geom_text_repel(aes(label=Haplotype), size=4, point.padding = 0.75) +
   plot_theme(baseSize = 20) + #  size="Year",
-  labs( x=glue("C1: {round(percentVar[1]*100,2)}% variance"),
-       y=glue("C2: {round(percentVar[2]*100,2)}% variance"))
+  labs( x=glue("C{plot_comps[1]}: {round(percentVar[plot_comps[1]]*100,2)}% variance"),
+       y=glue("C{plot_comps[2]}: {round(percentVar[plot_comps[2]]*100,2)}% variance"))
 # Save plot to a pdf file
-ggsave(filedate(glue::glue("{analysis_basename}_PCA_hostShape_pathoFill_labelsOutliers_PC1-2"),
-                ext = ".pdf", outdir = glue("{analysis_outdir}/plots"),
-                dateformat = FALSE), width = 8.5, height=6.5)
+ggsave(filedate(glue::glue("{analysis_basename}_PCA_hostShape_pathoFill_labelOutliers_PC{paste(plot_comps, collapse='-')}"),
+                ext = ".pdf", outdir = glue("{analysis_outdir}/plots")), width = 8.5, height=6.5)
 #### PCA plot 1-2 biological2 ####
 # shape - Year, Seq.Provider, Host (State)
 # Colors - Haplotype (diverged), State (diverged), Pathotype (RdYlGn)
 # Size - Pathogenicity
 # Create the plot for C1 and C2
-p <- ggplot(pca_data, aes(x=Axis1, y=Axis2, fill=Haplotype, 
+plot_comps <- 3:4
+plot_axes <- paste0("Axis", plot_comps)
+p <- ggplot(pca_data, aes(x=!!sym(plot_axes[1]), y=!!sym(plot_axes[2]), fill=Haplotype, 
                           size=Year,
                           shape=State)) # Host
 # Plot and add labels (represent component variance as a percentage)
@@ -243,24 +279,24 @@ p + geom_point(alpha = 0.8) + # , size=5, stroke = 1
   # geom_text_repel(aes(label=if_else(Isolate %in% outliers, glue("{Isolate} ({Year})"), ""), colour=adjustcolor( c("dodgerblue3"), alpha.f = 0.8)),
   #                 show.legend = FALSE, size=3.5, point.padding = 0.75) +
   # scale_color_() +
-  scale_fill_brewer(palette = "Dark2", direction = 1) + 
-  # scale_fill_manual(values = pal, aesthetics = c("fill")) + 
+  # scale_fill_brewer(palette = "Dark2", direction = 1) + 
+  scale_fill_manual(values = my_colours$Haplotype) +
   scale_shape_manual(values = shapes) +
   scale_color_manual(values=adjustcolor( seq_cols[1], alpha.f = 0.8)) +
   scale_size_continuous(range = c(3.5,6.5)) +
-  guides(shape = guide_legend(override.aes = list(size = 5, fill=path_cols[2]), order = 1),
-         fill = guide_legend(override.aes = list(size = 5, pch=shapes[1]), order = 2) ,size = guide_legend(override.aes = list(fill=path_cols[2], pch=shapes[1]), order = 3)) +
+  guides(shape = guide_legend(override.aes = list(size = 5, fill=pal[2]), order = 1),
+         fill = guide_legend(override.aes = list(size = 5, pch=shapes[1]), order = 2) ,
+         size = guide_legend(override.aes = list(fill=pal[2], pch=shapes[1]), order = 3)) +
   #  +
   # scale_size_manual(values = path_sizes[pca_data$Pathogenicity]) +
   
   # geom_text_repel(aes(label=Haplotype), size=4, point.padding = 0.75) +
   plot_theme(baseSize = 20) + #  size="Year",
-  labs( x=glue("C1: {round(percentVar[1]*100,2)}% variance"),
-        y=glue("C2: {round(percentVar[2]*100,2)}% variance"))
+  labs( x=glue("C{plot_comps[1]}: {round(percentVar[plot_comps[1]]*100,2)}% variance"),
+        y=glue("C{plot_comps[2]}: {round(percentVar[plot_comps[2]]*100,2)}% variance"))
 # Save plot to a pdf file
-ggsave(filedate(glue::glue("{analysis_basename}_PCA_yearSize_stateShape_haploFill_PC1-2"),
-                ext = ".pdf", outdir = glue("{analysis_outdir}/plots"),
-                dateformat = FALSE), width = 9, height=7)
+ggsave(filedate(glue::glue("{analysis_basename}_PCA_yearSize_stateShape_haploFill_PC{paste(plot_comps, collapse='-')}"),
+                ext = ".pdf", outdir = glue("{analysis_outdir}/plots")), width = 9, height=7)
 #### PC3-4 plot ####
 # Isolate to annotate
 outliers <- pca_data %>% filter(abs(Axis4) > 1 | abs(Axis3)>1) %>% .[,"Isolate"]
@@ -300,9 +336,12 @@ ggsave(filedate(glue::glue("{analysis_basename}_PCA_host_state_labelsyear_PC3-4"
 # Colors - Haplotype (diverged), State (diverged), Pathotype (RdYlGn)
 # Size - Pathogenicity
 # Create the plot for C1 and C2
-p <- ggplot(pca_data, aes(x=Axis1, y=Axis2, 
-                          # fill=GC_percentage, size=Coverage,
-                          shape=Sequencing_Centre, fill=Sequencing_Centre)) # Host
+plot_comps <- 3:4
+plot_axes <- paste0("Axis", plot_comps)
+p <- ggplot(pca_data, aes(x=!!sym(plot_axes[1]), y=!!sym(plot_axes[2]),
+                          fill=GC_percentage,
+                          size=Coverage,
+                          shape=Sequencing_Centre))#, fill=Sequencing_Centre)) # Host
 # Plot and add labels (represent component variance as a percentage)
 p + geom_point(alpha = 0.8)+ #, size=5) + # , stroke = 1
   # geom_text_repel(aes(colour=Sequenced, label=Isolate, fontface=seq_fontface), show.legend = FALSE,size=3.5, point.padding = 0.75) +
@@ -310,25 +349,24 @@ p + geom_point(alpha = 0.8)+ #, size=5) + # , stroke = 1
   #             show.legend = FALSE, size=3.5, point.padding = 0.75) +
   # scale_color_() +
   # scale_fill_brewer(palette = "Blues", direction = 1) + 
-  scale_fill_paletteer_c(viridis, inferno)+
+  scale_fill_paletteer_c("viridis::inferno")+
   # scale_fill_manual(values = pal, aesthetics = c("fill")) + 
   scale_shape_manual(values = shapes) +
   scale_color_manual(values=seq_cols) +
   # scale_size_continuous(range = c(3.5,6.5)) +
-  guides(shape = guide_legend(override.aes = list(size = 5, fill=path_cols[2]), order = 1, title = "Seq.Centre"),
+  guides(shape = guide_legend(override.aes = list(size = 5, fill=pal[2]), order = 1, title = "Seq.Centre"),
          fill = guide_legend(override.aes = list(size = 5, pch=shapes[1]), order = 2, title = "GC (%)") ,
-         size = guide_legend(override.aes = list(fill=path_cols[2], pch=shapes[1]), order = 3)) +
+         size = guide_legend(override.aes = list(fill=pal[2], pch=shapes[1]), order = 3)) +
   #  +
   # scale_size_manual(values = path_sizes[pca_data$Pathogenicity]) +
   
   # geom_text_repel(aes(label=Haplotype), size=4, point.padding = 0.75) +
   plot_theme(baseSize = 20) + #  size="Year",
-  labs( x=glue("C1: {round(percentVar[1]*100,2)}% variance"),
-        y=glue("C2: {round(percentVar[2]*100,2)}% variance"))
+  labs( x=glue("C{plot_comps[1]}: {round(percentVar[plot_comps[1]]*100,2)}% variance"),
+        y=glue("C{plot_comps[2]}: {round(percentVar[plot_comps[2]]*100,2)}% variance"))
 # Save plot to a pdf file
-ggsave(filedate(glue::glue("{analysis_basename}_PCA_technical_viridis_PC1-2"),
-                ext = ".pdf", outdir = glue("{analysis_outdir}/plots"),
-                dateformat = FALSE), width = 8.5, height=7)
+ggsave(filedate(glue::glue("{analysis_basename}_PCA_technical_viridis_PC{paste(plot_comps, collapse='-')}"),
+                ext = ".pdf", outdir = glue("{analysis_outdir}/plots")), width = 8.5, height=7)
 
 save.image(filedate(glue("{analysis_basename}_PCA_plots"), ext = ".RData", glue("{analysis_outdir}")))
 #### GenABEL ####

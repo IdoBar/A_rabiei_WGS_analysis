@@ -2,27 +2,26 @@ devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "util.R")
 
 # CRAN_packages <- c("tidyverse", "RColorBrewer", "ggrepel","GenABEL", "outliers", "SeqArray",
 #                    "SNPRelate","adegenet", "SNPassoc", "vcfR", "glue", "paletteer")
-CRAN_packages <- c("tidyverse","adegenet", "RColorBrewer",  "dendextend", "poppr", "ComplexHeatmap",
-                   "pvclust", "colorspace", "gplots", "paletteer", "pheatmap", "vcfR") # "GenABEL", "SNPRelate",
+CRAN_packages <- c("tidyverse","adegenet", "RColorBrewer",  "dendextend", "poppr","glue", #"ComplexHeatmap",
+                   "pvclust", "colorspace", "gplots", "paletteer", "pheatmap", "vcfR", "here")#, 
+                   # "ggplotify", "cowplot", "pryr") # "GenABEL", "SNPRelate",
 pacman::p_load(char=CRAN_packages)
 
 
-favourite_pals <- setNames(c("awtools", "rcartocolor", "RColorBrewer", "ggsci"), 
-                           c("mpalette", "Bold", "Set1", "category10_d3"))  
 #### Read data files ####
 # Read sample metadata and save to file
 analysis_basename="A_rabiei_2018"
 variant_method <- "snippy_multi"
-analysis_folder <- "../Snippy_multi_17_07_2019"
-analysis_outdir <- glue::glue("./output/{variant_method}")
+analysis_folder <- here("../Snippy_multi_17_07_2019")
+analysis_outdir <- here(glue("output/{variant_method}"))
 
-samples_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",
+samples_table <- readxl::read_excel(here("sample_info/A_rabiei_isolate_list_for_wgs.xlsx"),
                                     "sample_details_full")
 # read isolate sequencing info
-sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",sheet = "submission_info") 
+sequencing_table <- readxl::read_excel(here("sample_info/A_rabiei_isolate_list_for_wgs.xlsx"),sheet = "submission_info") 
 
 # read DArT-based clustering
-dart_clusters <- readxl::read_excel("../../A_rabiei_DArT/output/A_rabiei_DArT_poppr.xlsx", 
+dart_clusters <- readxl::read_excel(here("../../A_rabiei_DArT/output/A_rabiei_DArT_poppr.xlsx"), 
                                     "MLG_Cluster_table") %>%   select(-Pathotype)
 
 
@@ -36,15 +35,24 @@ ploidy(genind_obj) <- 1
 summary(genind_obj)
 
 samples_strata <- samples_table %>% slice(match(indNames(genind_obj), Isolate)) %>% 
-  dplyr::select(Isolate, State, Year, Host, Pathogenicity) %>% 
-  left_join(dart_clusters, by=c("Isolate"="Ind")) %>% rename(GBS_cluster = Cluster_fact) #%>% 
+  dplyr::select(Isolate, State, Year, Host, Pathogenicity, Patho.Group) %>% 
+  left_join(dart_clusters, by=c("Isolate"="Ind")) %>% rename(GBS_cluster = Cluster_fact) %>% 
+  mutate(State=factor(State, levels = c("QLD", "NSW", "VIC", "SA", "WA")),
+         GBS_cluster=factor(GBS_cluster), 
+         MLG=factor(as.character(MLG)),
+         Host=factor(Host),
+         # Year=factor(Year, levels = sort(unique(Year))),
+         Patho.Group=factor(Patho.Group, levels=paste0("Group", 0:5))) %>%
+  mutate_if(is.factor, ~fct_explicit_na(., na_level = "Unknown"))#%>% 
   # mutate_all(~replace_na(..1, "Unknown"))
 
 # Assign samples factors to Strata
-genind_obj@strata <- samples_strata %>% as.data.frame() %>% 
-  mutate(State=factor(State, levels = c("QLD", "NSW", "VIC", "SA")),
-                                               Year=factor(Year, levels = sort(unique(Year))),
-                             Pathogenicity=factor(Pathogenicity, levels = sort(unique(Pathogenicity))))
+genind_obj@strata <- samples_strata %>% as.data.frame() #%>% 
+  # mutate(State=factor(State, levels = c("QLD", "NSW", "VIC", "SA", "WA")),
+  #        Year=factor(Year, levels = sort(unique(Year))),
+  #        Patho.Group=factor(Patho.Group, levels=paste0("Group", 0:5))) %>%
+  # mutate_at(vars(Host, Haplotype, Patho.Group), ~fct_explicit_na(., na_level = "Unknown"))
+                             # Pathogenicity=factor(Pathogenicity, levels = sort(unique(Pathogenicity))))
 # set state as population factor
 pop(genind_obj) <- genind_obj@strata$State
 # pop(genind_obj) <- samples_table$State[match(indNames(genind_obj), samples_table$Isolate)]
@@ -57,7 +65,7 @@ str(strata(genind_obj))
 # adegenet::adegenetTutorial("dapc")
 # https://github.com/thibautjombart/adegenet/blob/master/tutorials/tutorial-dapc.pdf
 # https://grunwaldlab.github.io/Population_Genetics_in_R/DAPC.html
-Arab_dapc <- dapc(genind_obj, var.contrib = TRUE, scale = FALSE, n.pca = 30, n.da = nPop(genind_obj) - 1)
+Arab_dapc <- dapc(genind_obj, var.contrib = TRUE, scale = FALSE, n.pca = 20, n.da = nPop(genind_obj) - 1)
 scatter(Arab_dapc, cell = 0, cstar = 0, mstree = TRUE, lwd = 2, lty = 2)
 # cross-validating the number of PCs to retain
 myInset <- function(dapc_obj, text_x=5, text_y=90, text_cex=0.85){
@@ -98,27 +106,42 @@ myInset <- function(dapc_obj, text_x=5, text_y=90, text_cex=0.85){
 # set constants
 pca_range=6:18
 reps=1000
-shapes=15:19
+shapes=c(15:18, 9,25)
 ncores=parallel::detectCores()-1
 # cross-validating the number of PCs to retain (rep=1000)
+# set consistent colours
+
+favourite_pals <- setNames(c("awtools", "rcartocolor", "RColorBrewer", "ggsci"), 
+                           c("mpalette", "Bold", "Set1", "category10_d3"))  
+my_colours = list(
+  State = levels(samples_strata$State) %>% setNames(as.character(paletteer_d("RColorBrewer::Set1", length(.))), .),
+  Year = sort(unique(samples_strata$Year)) %>% setNames(as.character(paletteer_d("ggsci::default_uchicago", length(.))), .),
+  Patho.Group = levels(samples_strata$Patho.Group) %>% 
+    setNames(as.character(paletteer_d("RColorBrewer::RdYlGn", direction = -1))[round(seq(4,11, length.out = length(.)) ,0)], .),
+  Host = levels(samples_strata$Host) %>% setNames(as.character(paletteer_d("RColorBrewer::Dark2", length(.))), .),
+  GBS_cluster = levels(samples_strata$GBS_cluster) %>% 
+    setNames(c(as.character(paletteer_d("rcartocolor::Bold", n=length(.)-1)), "grey1"), .)
+)
+
 # Cluster by year
 strata_var <- "Year"
-pal <- "Set1"
+cols <- my_colours[[strata_var]]
+# pal <- "Set1"
 Year_dapc <- xvalDapc(tab(genind_obj, NA.method = "mean"), strata(genind_obj)[[strata_var]],
                   n.pca = pca_range, n.rep = reps,
                   parallel="snow", ncpus=ncores)
 
 # save plot
-pdf(file = filedate(sprintf("%s_DAPC_%s_analysis", variant_method,  strata_var), 
-                      ".pdf", outdir = glue::glue("{analysis_outdir}/plots")), width = 7, height=6)
+# pdf(file = filedate(sprintf("%s_DAPC_%s_analysis", variant_method,  strata_var), 
+#                       ".pdf", outdir = glue("{analysis_outdir}/plots")), width = 7, height=6)
 scatter(Year_dapc$DAPC,  cex = 2, legend = TRUE, pch=shapes, 
-        col = paletteer_d(!!favourite_pals[[pal]], !!pal), scree.da=FALSE, 
+        col = my_colours[[strata_var]], scree.da=FALSE, # paletteer_d(!!favourite_pals[[pal]], !!pal)
         clabel = FALSE, posi.leg = "topright", scree.pca = FALSE, 
         cleg = 0.85, xax = 1, yax = 2, inset.solid = 1)
 add.scatter(myInset(Year_dapc$DAPC), posi="bottomleft",
-            inset=c(0.01,-0.01), ratio=.25,
+            inset=c(0.01,-0.01), ratio=.2,
             bg=transp("white"))
-dev.off()
+# dev.off()
 
 # find unique alleles contributing to the variance of the year
 contrib <- loadingplot(Year_dapc$DAPC$var.contr, axis=2,
@@ -127,75 +150,78 @@ contrib$var.names # marker names above the threshold
 
 # cluster by state
 strata_var <- "State"
-pal <- "Bold"
+# pal <- "Bold"
 state_dapc <- xvalDapc(tab(genind_obj, NA.method = "mean"), strata(genind_obj)[[strata_var]],
                           n.pca = pca_range, n.rep = reps,
                           parallel="snow", ncpus=ncores)
 
 # save plot
 pdf(file = filedate(sprintf("%s_DAPC_%s_analysis", variant_method,  strata_var), 
-                    ".pdf", outdir = glue::glue("{analysis_outdir}/plots")), width = 7, height=6)
+                    ".pdf", outdir = glue("{analysis_outdir}/plots")), width = 7, height=6)
 scatter(state_dapc$DAPC,  cex = 2, legend = TRUE, pch=shapes, 
-        col = paletteer_d(!!favourite_pals[[pal]], !!pal), scree.da=FALSE, 
+        col = my_colours[[strata_var]], scree.da=FALSE, 
         clabel = FALSE, posi.leg = "topright", scree.pca = FALSE, 
         cleg = 0.85, xax = 1, yax = 2, inset.solid = 1)
 add.scatter(myInset(state_dapc$DAPC), posi="bottomleft",
-            inset=c(0.01,-0.01), ratio=.25,
+            inset=c(0.01,-0.01), ratio=.2,
             bg=transp("white"))
+
 dev.off()
   
   
-
+# cowplot::plot_grid(p1.year,p1.state ,labels = c('A', 'B' ), label_size = 12)
 # cluster by Host
 strata_var <- "Host"
-pal <- "category10_d3"
+# pal <- "category10_d3"
 host_dapc <- xvalDapc(tab(genind_obj, NA.method = "mean"), strata(genind_obj)[[strata_var]],
                       n.pca = pca_range, n.rep = reps,
                       parallel="snow", ncpus=ncores)
 
 # save plot
 pdf(file = filedate(sprintf("%s_DAPC_%s_analysis", variant_method,  strata_var), 
-                    ".pdf", outdir = glue::glue("{analysis_outdir}/plots")), width = 7, height=6)
+                    ".pdf", outdir = glue("{analysis_outdir}/plots")), width = 7, height=6)
 scatter(host_dapc$DAPC,  cex = 2, legend = TRUE, pch=shapes, 
-        col = paletteer_d(!!favourite_pals[[pal]], !!pal), scree.da=FALSE, 
+        col = my_colours[[strata_var]], scree.da=FALSE, 
         clabel = FALSE, posi.leg = "topright", scree.pca = FALSE, 
         cleg = 0.85, xax = 1, yax = 2, inset.solid = 1)
-add.scatter(myInset(host_dapc$DAPC), posi="bottomleft",
-            inset=c(0.01,-0.01), ratio=.25,
+add.scatter(myInset(host_dapc$DAPC), posi="bottomright",
+            inset=c(0.01,-0.01), ratio=.15,
             bg=transp("white"))
 dev.off()
 
+# plot_grid(p1.base,p2.host ,labels = c('A', 'B' ), label_size = 12)  
+  
 # cluster by Pathogenicity
-strata_var <- "Pathogenicity"
-pal <- "mpalette"
+strata_var <- "Patho.Group"
+# pal <- "mpalette"
 patho_dapc <- xvalDapc(tab(genind_obj, NA.method = "mean"), strata(genind_obj)[[strata_var]],
                        n.pca = pca_range, n.rep = reps,
                        parallel="snow", ncpus=ncores)
 
 # save plot
 pdf(file = filedate(sprintf("%s_DAPC_%s_analysis", variant_method,  strata_var), 
-                    ".pdf", outdir = glue::glue("{analysis_outdir}/plots")), width = 8, height=7)
+                    ".pdf", outdir = glue("{analysis_outdir}/plots")), width = 8, height=7)
 scatter(patho_dapc$DAPC,  cex = 2, legend = TRUE, pch=shapes, 
-        col = paletteer_d(!!favourite_pals[[pal]], !!pal), scree.da=FALSE, 
+        col = my_colours[[strata_var]], scree.da=FALSE, solid = 1,
         clabel = FALSE, posi.leg = "topright", scree.pca = FALSE, 
         cleg = 0.85, xax = 1, yax = 2, inset.solid = 1)
 add.scatter(myInset(patho_dapc$DAPC), posi="bottomleft",
-            inset=c(0.01,-0.03), ratio=.25,
+            inset=c(0.01,-0.03), ratio=.15,
             bg=transp("white"))
 dev.off()
 # DAPC by GBS clusters
 strata_var <- "GBS_cluster"
-pal <- "category10_d3"
+# pal <- "Bold"
 cluster_dapc <- xvalDapc(tab(genind_obj, NA.method = "mean"), genind_obj@strata[[strata_var]],
                       n.pca = pca_range, n.rep = reps,
                       parallel="snow", ncpus=ncores)
 
 # save plot
 pdf(file = filedate(sprintf("%s_DAPC_%s_analysis", variant_method,  strata_var), 
-                    ".pdf", outdir = glue::glue("{analysis_outdir}/plots")), width = 7, height=6)
+                    ".pdf", outdir = glue("{analysis_outdir}/plots")), width = 7, height=6)
 scatter(cluster_dapc$DAPC,  cex = 2, legend = TRUE, pch=shapes, 
-        col = paletteer_d(glue::glue("{favourite_pals[[pal]]}::{pal}")), scree.da=FALSE, 
-        clabel = FALSE, posi.leg = "topright", scree.pca = FALSE, 
+        col = my_colours[[strata_var]], scree.da=FALSE, 
+        clabel = FALSE, posi.leg = "bottomright", scree.pca = FALSE, 
         cleg = 0.85, xax = 1, yax = 2, inset.solid = 1)
 add.scatter(myInset(cluster_dapc$DAPC), posi="bottomleft",
             inset=c(0.01,-0.01), ratio=.25,
@@ -218,11 +244,13 @@ amova.cc.test$pvalue
 # Heatmap ####
 # correct clone
 Arab_cc <- clonecorrect(genind_obj, strata = NA)#, keep = 1:2)
-pop(gen_clone)
+# pop(gen_clone)
 # calculate distance
 Arab_cc.mat <- diss.dist(Arab_cc, mat = TRUE)
 Arab_cc.dist <- diss.dist(Arab_cc, mat = FALSE)
-heatmap_metadata <- genind_obj@strata %>% mutate_if(is.character, ~factor(replace_na(.x, "NA"))) %>% 
+heatmap_metadata <- genind_obj@strata %>% 
+  mutate(Year=factor(Year, levels = sort(unique(Year)))) %>% 
+  mutate_if(is.character, ~factor(replace_na(.x, "NA"))) %>% 
 column_to_rownames("Isolate")
 # data.frame(, row.names = sample_cols) %>% 
    
@@ -237,20 +265,20 @@ column_to_rownames("Isolate")
 # )
 
 # specify colours
-my_colours = list(
-  State = levels(heatmap_metadata$State) %>% 
-    setNames(as.character(paletteer_d("RColorBrewer::Set1", length(.))), .),
-  Year = levels(heatmap_metadata$Year) %>% 
-    setNames(as.character(paletteer_d("ggsci::default_uchicago", length(.))), .),
-  Pathogenicity = levels(heatmap_metadata$Pathogenicity) %>% 
-    setNames(as.character(paletteer_d("RColorBrewer::RdYlGn", length(.), direction = -1)), .),
-  Host = levels(heatmap_metadata$Host) %>% 
-    setNames(as.character(paletteer_d(glue::glue("{favourite_pals[4]}::{names(favourite_pals[4])}"), 
-                                           n=length(.))), .), 
-  GBS_cluster = levels(heatmap_metadata$GBS_cluster) %>% 
-  setNames(c(as.character(paletteer_d(glue::glue("{favourite_pals[2]}::{names(favourite_pals[2])}"),
-                                    n=length(.)-1)), "gray80"), .)
-)
+# my_colours = list(
+#   State = levels(heatmap_metadata$State) %>% 
+#     setNames(as.character(paletteer_d("RColorBrewer::Set1", length(.))), .),
+#   Year = levels(heatmap_metadata$Year) %>% 
+#     setNames(as.character(paletteer_d("ggsci::default_uchicago", length(.))), .),
+#   Pathogenicity = levels(heatmap_metadata$Pathogenicity) %>% 
+#     setNames(as.character(paletteer_d("RColorBrewer::RdYlGn", length(.), direction = -1)), .),
+#   Host = levels(heatmap_metadata$Host) %>% 
+#     setNames(as.character(paletteer_d(glue::glue("{favourite_pals[4]}::{names(favourite_pals[4])}"), 
+#                                            n=length(.))), .), 
+#   GBS_cluster = levels(heatmap_metadata$GBS_cluster) %>% 
+#   setNames(c(as.character(paletteer_d(glue::glue("{favourite_pals[2]}::{names(favourite_pals[2])}"),
+#                                     n=length(.)-1)), "gray80"), .)
+# )
 cluster_num <- 3
 
 Heatmap(Arab_cc.mat, col = paletteer_c("viridis::viridis", 50, direction = -1), name = "Genetic distance", 
@@ -259,16 +287,16 @@ dist_heatmap <- pheatmap(Arab_cc.mat, show_rownames = FALSE, show_colnames = FAL
                          color = paletteer_c("viridis::viridis", 50, direction = -1), 
                          annotation_colors = my_colours,
                          # clustering_distance_rows = dist_matrix, clustering_distance_cols = dist_matrix,
-                         annotation_row = heatmap_metadata[c("State", "Year")], 
-                         annotation_col = heatmap_metadata[c("Host", "Pathogenicity", "GBS_cluster")], 
+                         annotation_row = heatmap_metadata[c("State")], #"Year", "Host"
+                         annotation_col = heatmap_metadata[c("Patho.Group", "GBS_cluster")], 
                          cutree_rows = cluster_num, cutree_cols = cluster_num , 
-             # filename = glue("{analysis_outdir}/plots/A_rabiei_WGS_heatmap_{cluster_num}clusters.pdf"), 
+             filename = glue("{analysis_outdir}/plots/A_rabiei_WGS_heatmap_{cluster_num}clusters.pdf"),
                          width = 8, height = 6.5)
 
 
 dist_heatmap <- pheatmap(Arab_cc.mat, annotation_col = heatmap_metadata[c("Host", "State")], cutree_rows = 2,
          cutree_cols = 2, annotation_colors = ann_colors,
-         annotation_row = heatmap_metadata[c("Pathogenicity", "Year")])
+         annotation_row = heatmap_metadata[c("Patho.Group", "Year")])
 plot(hclust(Arab_cc.dist))
 # distgenEUCL <- dist(genind_obj, method = "euclidean", diag = FALSE, upper = FALSE, p = 2)
 
