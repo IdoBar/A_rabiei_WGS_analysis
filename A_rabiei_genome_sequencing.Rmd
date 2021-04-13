@@ -1,7 +1,7 @@
 ---
 title: "Whole Genome Sequencing of <i>Ascochyta rabiei</i> Isolates"
 author: "Ido Bar"
-date: "18 July 2017"
+date: "11 April 2021"
 always_allow_html: yes
 output: 
     # md_document:
@@ -27,7 +27,7 @@ csl: style/springer-basic-improved-author-date-with-italic-et-al-period.csl
 devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "util.R")
 knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
 # options(width = 180)
-cran_packages <- c("tidyverse", "knitr", "pander", "captioner", "DT", "circlize", "htmltab")
+cran_packages <- c("tidyverse", "knitr", "pander", "captioner", "DT", "htmltab")
 chooseCRANmirror(ind=1)
 pacman::p_load(char=cran_packages)
 # Connect to Zotero to access references
@@ -74,7 +74,7 @@ tfam_table <- samples_table  %>% dplyr::select(State, Isolate) %>%
 ```
 
 # Experimental Design
-In 2017, DNA was extracted from 21 strains of _Ascochyta rabiei_ and sent for Whole-Genome-Sequencing (WGS) on an Illumina HiSeq2500, producing 100 bp short paired-end reads (Macrogen, Korea; detailed sequencing report can be found at `Macrogen_report_1702KHP-0164.pdf` file).  
+In 2021, DNA was extracted from 197 isolates of _Ascochyta rabiei_ and sent for Whole-Genome-Sequencing (WGS) on an Illumina HiSeq2500, producing 100 bp short paired-end reads (Macrogen, Korea; detailed sequencing report can be found at `Macrogen_report_1702KHP-0164.pdf` file).  
 In the following year (2018), DNA from 20 additional *A. rabiei* isolates was extracted and sent for WGS, first to AgriBio, Centre for AgriBioscience, Agriculture Victoria Research ([Dimpy](mailto:sukhjiwan.kaur\@ecodev.vic.gov.au) and [Brittney](mailto:brittney.caruana\@ecodev.vic.gov.au)) on a HiSeq3000, producing 150 bp paired-end reads. Since the library preparation and sequencing was substantially delayed, 18 DNA samples, mostly overlapping with the 20 samples sent for AgriVic, were sent for sequencing at the Australian Genome Research Facility (AGRF, Melbourne) on 4 lanes of a NextSeq500 flowcell, producing 150 bp paried-end reads (run name CAGRF19461).  
 Details of the sequenced isolates is provided in (`r tbls(name="samples",display="cite")`).
 
@@ -172,7 +172,7 @@ gawk -v ARRAY_IND=\$PBS_ARRAY_INDEX 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > ${RU
 
 # Run the commands 
 JOB_NAME=${RUN}
-JOBS_NUM=`wc -l ${RUN}.bash | gawk '{print $1}'`
+JOBS_NUM=`cat ${RUN}.bash | wc -l`
 SNPY_ID=$( qsub -J1-$JOBS_NUM -N ${JOB_NAME:0:11} -vCMDS_FILE=${RUN}.bash  ${RUN}.pbspro ) 
 SNPY_ID=$( echo $SNPY_ID | egrep -o "[0-9]{7}"  )
 # record the array ID: 5247580[] Macrogen batch on Gowonda
