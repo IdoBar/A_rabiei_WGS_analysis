@@ -764,7 +764,7 @@ find . -size 0 -exec rm {} +
 ```
 
 #### VCF filtering
-Variants were filtered using `r fontFmt("SnpSift")` v4.3.1 [@ruden_using_2012], based on their total loci depth, keeping ony SNP loci with at least 100 reads covering the locus (DP$\ge 100$) and not more than 20000 (based on EDA). In addition, each isolate genotype call was removed (recoded as `./.`) if it had read depth <5.
+Variants were filtered using `r fontFmt("SnpSift")` v4.3.1 [@ruden_using_2012], based on their total loci depth, keeping only SNP loci with at least 100 reads covering the locus (DP$\ge 100$) and not more than 20000 (based on EDA). In addition, each isolate genotype call was removed (recoded as `./.`) if it had read depth <5.
 ```{bash vcf_filter}
 # Recode genotypes as missing if below a certain threshold, such as genotyping quality or depth (GQ:DP)  
 # filter only polymorphic SNPs, using QUAL>20, DP<36000/20000
