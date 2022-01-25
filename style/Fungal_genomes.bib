@@ -39,6 +39,22 @@
   author = {Jana, Sperschneider and N, Dodds Peter and M, Gardiner Donald and B, Singh Karam and M, Taylor Jennifer}
 }
 
+@article{BradburyTASSELsoftwareassociation2007,
+  title = {{{TASSEL}}: Software for Association Mapping of Complex Traits in Diverse Samples},
+  shorttitle = {{{TASSEL}}},
+  author = {Bradbury, Peter J. and Zhang, Zhiwu and Kroon, Dallas E. and Casstevens, Terry M. and Ramdoss, Yogesh and Buckler, Edward S.},
+  date = {2007-10-01},
+  journaltitle = {Bioinformatics},
+  shortjournal = {Bioinformatics},
+  volume = {23},
+  number = {19},
+  pages = {2633--2635},
+  issn = {1367-4803},
+  doi = {10.1093/bioinformatics/btm308},
+  url = {https://doi.org/10.1093/bioinformatics/btm308},
+  urldate = {2021-05-27},
+  abstract = {Summary: Association analyses that exploit the natural diversity of a genome to map at very high resolutions are becoming increasingly important. In most studies, however, researchers must contend with the confounding effects of both population and family structure. TASSEL (Trait Analysis by aSSociation, Evolution and Linkage) implements general linear model and mixed linear model approaches for controlling population and family structure. For result interpretation, the program allows for linkage disequilibrium statistics to be calculated and visualized graphically. Database browsing and data importation is facilitated by integrated middleware. Other features include analyzing insertions/deletions, calculating diversity statistics, integration of phenotypic and genotypic data, imputing missing data and calculating principal components.Availability: The TASSEL executable, user manual, example data sets and tutorial document are freely available at http://www.maizegenetics.net/tassel. The source code for TASSEL can be found at http://sourceforge.net/projects/tassel.Contact:pjb39@cornell.edu}
+
 @article{glaubitz_tassel-gbs:_2014,
 	title = {{TASSEL}-{GBS}: A High Capacity Genotyping by Sequencing Analysis Pipeline},
 	volume = {9},
@@ -252,7 +268,61 @@ AVAILABILITY: http://cran.r-project.org.},
   eprint = {17384015}
 }
 
+@article{WinterMMODlibrarycalculation2012,
+  title = {{{MMOD}}: An {{R}} Library for the Calculation of Population Differentiation Statistics},
+  shorttitle = {{{MMOD}}},
+  author = {Winter, David J.},
+  date = {2012-11},
+  journaltitle = {Molecular Ecology Resources},
+  shortjournal = {Mol Ecol Resour},
+  volume = {12},
+  number = {6},
+  eprint = {22883857},
+  eprinttype = {pmid},
+  pages = {1158--1160},
+  issn = {1755-0998},
+  doi = {10.1111/j.1755-0998.2012.03174.x},
+  abstract = {MMOD is a library for the R programming language that allows the calculation of the population differentiation measures D(est), G″(ST) and φ'(ST). R provides a powerful environment in which to conduct and record population genetic analyses but, at present, no R libraries provide functions for the calculation of these statistics from standard population genetic files. In addition to the calculation of differentiation measures, mmod can produce parametric bootstrap and jackknife samples of data sets for further analysis. By integrating with and complimenting the existing libraries adegenet and pegas, mmod extends the power of R as a population genetic platform.},
+  langid = {english},
+  keywords = {Computational Biology,Genetics; Population,Software,Statistics as Topic}
+}
 
+@article{KamvarPopprpackagegenetic2014,
+  title = {Poppr: An {{R}} Package for Genetic Analysis of Populations with Clonal, Partially Clonal, and/or Sexual Reproduction},
+  shorttitle = {Poppr},
+  author = {Kamvar, Zhian N. and Tabima, Javier F. and Grünwald, Niklaus J.},
+  date = {2014-03-04},
+  journaltitle = {PeerJ},
+  shortjournal = {PeerJ},
+  volume = {2},
+  eprint = {24688859},
+  eprinttype = {pmid},
+  issn = {2167-8359},
+  doi = {10.7717/peerj.281},
+  url = {https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3961149/},
+  urldate = {2019-08-20},
+  abstract = {Many microbial, fungal, or oomcyete populations violate assumptions for population genetic analysis because these populations are clonal, admixed, partially clonal, and/or sexual. Furthermore, few tools exist that are specifically designed for analyzing data from clonal populations, making analysis difficult and haphazard. We developed the R package poppr providing unique tools for analysis of data from admixed, clonal, mixed, and/or sexual populations. Currently, poppr can be used for dominant/codominant and haploid/diploid genetic data. Data can be imported from several formats including GenAlEx formatted text files and can be analyzed on a user-defined hierarchy that includes unlimited levels of subpopulation structure and clone censoring. New functions include calculation of Bruvo’s distance for microsatellites, batch-analysis of the index of association with several indices of genotypic diversity, and graphing including dendrograms with bootstrap support and minimum spanning networks. While functions for genotypic diversity and clone censoring are specific for clonal populations, several functions found in poppr are also valuable to analysis of any populations. A manual with documentation and examples is provided. Poppr is open source and major releases are available on CRAN: http://cran.r-project.org/package=poppr. More supporting documentation and tutorials can be found under ‘resources’ at: http://grunwaldlab.cgrb.oregonstate.edu/.},
+  pmcid = {PMC3961149}
+}
+
+@article{Jombartadegenet31new2011a,
+  title = {Adegenet 1.3-1: New Tools for the Analysis of Genome-Wide {{SNP}} Data},
+  shorttitle = {Adegenet 1.3-1},
+  author = {Jombart, Thibaut and Ahmed, Ismaïl},
+  date = {2011-11-01},
+  journaltitle = {Bioinformatics},
+  shortjournal = {Bioinformatics},
+  volume = {27},
+  number = {21},
+  pages = {3070--3071},
+  publisher = {{Oxford Academic}},
+  issn = {1367-4803},
+  doi = {10.1093/bioinformatics/btr521},
+  url = {https://academic.oup.com/bioinformatics/article/27/21/3070/218892},
+  urldate = {2020-06-09},
+  abstract = {Abstract.  Summary: While the R software is becoming a standard for the analysis of genetic data, classical population genetics tools are being challenged by th},
+  langid = {english}
+}
 
 @article{gonzalez_snpassoc:_2007,
   title = {{{SNPassoc}}: An {{R}} Package to Perform Whole Genome Association Studies},
@@ -515,6 +585,36 @@ phil.ewels@scilifelab.se},
   pmcid = {PMC5039924}
 }
 
+@article{tischlerBiobambamToolsRead2014,
+  title = {Biobambam: Tools for Read Pair Collation Based Algorithms on {{BAM}} Files},
+  shorttitle = {Biobambam},
+  author = {Tischler, German and Leonard, Steven},
+  date = {2014-06-20},
+  journaltitle = {Source Code for Biology and Medicine},
+  shortjournal = {Source Code for Biology and Medicine},
+  volume = {9},
+  number = {1},
+  pages = {13},
+  issn = {1751-0473},
+  doi = {10.1186/1751-0473-9-13},
+  url = {https://doi.org/10.1186/1751-0473-9-13},
+  urldate = {2020-11-25},
+  abstract = {Sequence alignment data is often ordered by coordinate (id of the reference sequence plus position on the sequence where the fragment was mapped) when stored in BAM files, as this simplifies the extraction of variants between the mapped data and the reference or of variants within the mapped data. In this order paired reads are usually separated in the file, which complicates some other applications like duplicate marking or conversion to the FastQ format which require to access the full information of the pairs.}
+}
+
+
+@inproceedings{vasimuddinEfficientArchitectureAwareAcceleration2019,
+  title = {Efficient {{Architecture}}-{{Aware Acceleration}} of {{BWA}}-{{MEM}} for {{Multicore Systems}}},
+  booktitle = {2019 {{IEEE International Parallel}} and {{Distributed Processing Symposium}} ({{IPDPS}})},
+  author = {Vasimuddin, Md. and Misra, Sanchit and Li, Heng and Aluru, Srinivas},
+  date = {2019-05},
+  pages = {314--324},
+  issn = {1530-2075},
+  doi = {10.1109/IPDPS.2019.00041},
+  abstract = {Innovations in Next-Generation Sequencing are enabling generation of DNA sequence data at ever faster rates and at very low cost. For example, the Illumina NovaSeq 6000 sequencer can generate 6 Terabases of data in less than two days, sequencing nearly 20 Billion short DNA fragments called reads at the low cost of \$1000 per human genome. Large sequencing centers typically employ hundreds of such systems. Such highthroughput and low-cost generation of data underscores the need for commensurate acceleration in downstream computational analysis of the sequencing data. A fundamental step in downstream analysis is mapping of the reads to a long reference DNA sequence, such as a reference human genome. Sequence mapping is a compute-intensive step that accounts for more than 30\% of the overall time of the GATK (Genome Analysis ToolKit) best practices workflow. BWA-MEM is one of the most widely used tools for sequence mapping and has tens of thousands of users. In this work, we focus on accelerating BWA-MEM through an efficient architecture aware implementation, while maintaining identical output. The volume of data requires distributed computing and is usually processed on clusters or cloud deployments with multicore processors usually being the platform of choice. Since the application can be easily parallelized across multiple sockets (even across distributed memory systems) by simply distributing the reads equally, we focus on performance improvements on a single socket multicore processor. BWA-MEM run time is dominated by three kernels, collectively responsible for more than 85\% of the overall compute time. We improved the performance of the three kernels by 1) using techniques to improve cache reuse, 2) simplifying the algorithms, 3) replacing many small memory allocations with a few large contiguous ones to improve hardware prefetching of data, 4) software prefetching of data, and 5) utilization of SIMD wherever applicable and massive reorganization of the source code to enable these improvements. As a result, we achieved nearly 2x, 183x, and 8x speedups on the three kernels, respectively, resulting in up to 3.5x and 2.4x speedups on end-to-end compute time over the original BWA-MEM on single thread and single socket of Intel Xeon Skylake processor. To the best of our knowledge, this is the highest reported speedup over BWA-MEM (running on a single CPU) while using a single CPU or a single CPU-single GPGPU/FPGA combination.},
+  eventtitle = {2019 {{IEEE International Parallel}} and {{Distributed Processing Symposium}} ({{IPDPS}})},
+  keywords = {acceleration,Acceleration,architecture aware implementation,architecture-aware acceleration,bioinformatics,Bioinformatics,biology computing,BWA,BWA-MEM,cache storage,commensurate acceleration,compute-intensive step,coprocessors,data underscores,distributed memory systems,DNA,DNA sequence data,downstream analysis,downstream computational analysis,end-to-end compute time,field programmable gate arrays,GATK best practices workflow,genetics,genome analysis toolkit,genomics,Genomics,Illumina NovaSeq 6000 sequencer,Kernel,low-cost generation,molecular biophysics,multi-threading,multicore CPU,Multicore processing,multicore processors,multicore systems,multiprocessing systems,next-generation sequencing,parallel algorithms,parallel architectures,parallel processing,Program processors,reference human genome,sequence mapping,sequencing centers,sequencing data,Sequential analysis,single socket multicore processor,storage management}
+}
 
 
 

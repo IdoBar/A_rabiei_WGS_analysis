@@ -1,5 +1,0 @@
-Module	Section	Sample Name	Source
-fastp	all_sections	AR0181_H3HGFDSX2_TTCTGTAGAA-TATTGCGCTC_L002_R1	/scratch/s2978925/A_rabiei_WGS_2021/AGRF_snippy_12_05_2021/fastp.json
-fastp	all_sections	AR0039_H3HGFDSX2_TAAGCATCCA-AATGGATTGA_L002_R1	/scratch/s2978925/A_rabiei_WGS_2021/AGRF_snippy_12_05_2021/AR0039/AR0039.fastp.json
-fastp	all_sections	AR0052_H3HGFDSX2_CTCTGCAGCG-TACATCCATC_L002_R1	/scratch/s2978925/A_rabiei_WGS_2021/AGRF_snippy_12_05_2021/AR0052/AR0052.fastp.json
-fastp	all_sections	AR0242_H3HGFDSX2_AATGCGAACA-TCCGCCAATT_L002_R1	/scratch/s2978925/A_rabiei_WGS_2021/AGRF_snippy_12_05_2021/AR0242/AR0242.fastp.json
