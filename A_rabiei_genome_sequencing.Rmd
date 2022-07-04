@@ -10,16 +10,19 @@ output:
       # toc_depth: 3
 #      highlight: pygments
 #      number_sections: false
-    html_document:
+    bookdown::html_document2:
+      df_print: paged
+      theme: united
+      highlight: tango
       css: "style/style.css"
       toc: true
       toc_float: true
       toc_depth: 3
-      highlight: pygments
+  #    highlight: pygments
       number_sections: false
       code_folding: hide
 #      keep_md: true
-bibliography: style/Fungal_genomes.bib
+# bibliography: style/Fungal_genomes.bib
 csl: style/springer-basic-improved-author-date-with-italic-et-al-period.csl
 ---
 
@@ -31,7 +34,7 @@ knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
 chooseCRANmirror(ind=1)
 options(repos = getOption("repos")["CRAN"]) # fix the annoying "unable to access index..."
 pacman::p_load(tidyverse, readxl, scales, paletteer, 
-               htmltools, ggrepel, here,  DT, captioner, 
+               htmltools, ggrepel, here,  DT, captioner, plotly,
                tabulizer)
 # Connect to Zotero to access references
 # biblio <- ReadBib("data/Fungal_genomes.bib") # , "bibtex", "RefManageR"
@@ -57,18 +60,20 @@ tbls(name="mapping_rates", HTML("Mapping rates of the WGS reads to the <i>Ascoch
 tbls(name="mapping_sum", "Mapping statistics for 2021 sequencing batches.")
 figs(name="GC_cont", "GC (%) content in trimmed WGS reads.")
 
-selected_isolates_file <-
-  here("../samples_db/data/Ascochyta_rabiei_200_selection_2020.xlsx")
-selected_samples <- read_excel(selected_isolates_file,
-                                       sheet = "selected_isolates_Ido") %>% 
-  setNames(stringr::str_to_title(sub("_.+$", "", names(.)))) %>% .[c(8:7,1:4)] %>% rename(Host=Genotype)
-
-patho_table <- read_excel("../samples_db/output/A_rabiei_pathotypes_2013-2020.xlsx", sheet = "pathotyping")
+# selected_isolates_file <-
+#   here("../samples_db/data/Ascochyta_rabiei_200_selection_2020.xlsx")
+# selected_samples <- read_excel(selected_isolates_file,
+#                                        sheet = "selected_isolates_Ido") %>% 
+#   setNames(stringr::str_to_title(sub("_.+$", "", names(.)))) %>% .[c(8:7,1:4)] %>% rename(Host=Genotype)
+# 
+# patho_table <- read_excel("../samples_db/output/A_rabiei_pathotypes_2013-2020.xlsx", sheet = "pathotyping")
 sequencing_table <- read_excel("./sample_info/AGRF_NGS_Plates.xlsx", sheet = "Sample Details") %>% 
   mutate(Isolate=sub("_R$", "", `Sample Name`))
-
-samples_table <- selected_samples %>% left_join(patho_table %>% select(Isolate, Year, Pathogenicity=Path_rating)) %>% 
-  arrange(Isolate)
+samples_table <- readxl::read_excel(here("sample_info/Summary_tables_AR_2020.xlsx"), "samples_db")
+# 
+# 
+# samples_table <- selected_samples %>% left_join(patho_table %>% select(Isolate, Year, Pathogenicity=Path_rating)) %>% 
+#   arrange(Isolate)
 
 #readxl::read_excel("../P_rabiei_isolate_list_for_wgs.xlsx", sheet = "Sequenced") %>%
   # filter(!is.na(Sequenced))  %>% inner_join(isolate_table) %>%
@@ -91,7 +96,7 @@ Details of the sequenced isolates is provided in (`r tbls(name="samples",display
 ```{r samples_table, eval=TRUE} 
 datatable(samples_table, caption=tbls("samples"), rownames = FALSE) %>% # , 
           # options = list(dom = 'tf', pageLength = 40)) %>%
-  formatStyle('Pathogenicity',
+  formatStyle('Path_rating',
   backgroundColor = styleInterval(0:4, c('limegreen','gold', 'orange', 'orangered', 'firebrick', 'darkred'))
 )# pander , justify="left"
 ```
@@ -728,7 +733,93 @@ include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
 ### Population Genetics
 The core SNPs were initially filtered by `r fontFmt("TASSEL")` [@BradburyTASSELsoftwareassociation2007] and then imported to R and were used to analyse the population structure using a range of popgen packages (`r fontFmt("adegenet")`, `r fontFmt("poppr")`, `r fontFmt("mmod")` and more) [@Jombartadegenet31new2011a; @KamvarPopprpackagegenetic2014; @WinterMMODlibrarycalculation2012].
 
+The SNP data was used to calculate a distance matrix between all samples, which was then used as inpur for principle component analysis (PCA). The PCA was plotted as an interactive `r fontFmt("plotly")` plot to allow exploration of the data and selection of isolates for further experiments/screening based on their phenotype, collection origin and genetic makeup.
 
+```{r PCA-plotly, eval=TRUE, warning=FALSE, echo=FALSE, out.width="100%"}
+# select samples for Hayley
+hayley_isolates <- readxl::read_excel(here("sample_info/Summary_tables_AR_2020.xlsx"), "samples_db") %>% 
+  filter(between(lat, -32.4, -28.7), between(lon, 147.9, 151.05))
+
+pca_data <- read_csv(list.files("output", "PCA_data_WGS.+.csv", full.names = TRUE), na = "Unknown") %>% 
+  mutate(Host=factor(Host),
+         Year=factor(Year, levels = sort(unique(Year))),
+         
+      #   Patho.Group=paste0("PG", Path_rating),
+         Patho.Group=factor(Patho.Group, levels=paste0("PG", 0:5))) %>%
+  mutate_if(is.factor, ~fct_explicit_na(., na_level = "Unknown"))
+# %>% mutate(Host=fct_relevel(fct_infreq(fct_lump_min(Host, min=6)), "Other",
+#                                                   after = Inf),
+#                                  State=factor(State, levels = c("QLD", "NSW", "VIC", "SA", "WA", "SPAIN")))
+# Calculate variance for each component (columns starting with 'C')
+pca_var <- pca_data %>% summarise_at(vars(starts_with("Axis")), var)
+# Calculate the percentage of each component of the total variance
+percentVar <- pca_var/sum(pca_var)
+# Define colour palette, but get rid of the awful yellow - number 6
+# pal <- brewer.pal(9, "Set1")
+# pal2 <- brewer.pal(8, "Dark2")
+# set consistent colour palettes
+my_colours = list(
+  # State = levels(genind_obj@strata$State) %>% setNames(as.character(paletteer_d("RColorBrewer::Set1", length(.))), .),
+  # Origin = levels(glsub@strata$Origin) %>% setNames(as.character(paletteer_d("RColorBrewer::Set1", length(.)+1)[-6]), .),
+  Year = levels(pca_data$Year) %>% setNames(as.character(paletteer_d("ggsci::default_uchicago", length(.))), .),
+  Patho.Group = levels(pca_data$Patho.Group) %>% 
+    setNames(c(as.character(paletteer_d("RColorBrewer::RdYlGn", direction = -1))[round(seq(4,11, length.out = length(.)-1 ) ,0)], "grey80"), .)
+)
+text_cols <- adjustcolor( c("grey15", "dodgerblue3"), alpha.f = 0.8)
+# seq_face <- setNames(c("bold", "plain"),unique(pca_data$Sequenced))
+shapes <- c(17,19)# c(21:25, 3)
+# Isolate to annotate
+outliers <- pca_data %>% filter(Isolate %in% hayley_isolates$Isolate)
+# 
+#### PCA plot 1-2 geographic ####
+# Create the plot for C1 and C2
+plot_comps <- 1:2
+plot_axes <- paste0("Axis", plot_comps)
+pale_theme <- ggthemr::ggthemr("pale", text_size = 20, set_theme = FALSE)
+pca_12 <- ggplot(pca_data, aes(x=!!sym(plot_axes[1]), y=!!sym(plot_axes[2]), 
+                               colour=Patho.Group)) + # shape=State,    alpha=alpha)
+                   aes(label=Isolate, shape=Region) + 
+  
+  geom_jitter(alpha = 0.65, size = 4, width = 0.95, height = 0.95) +
+  # geom_point(alpha = 0.65, size=4) +
+  scale_colour_manual(values = my_colours$Patho.Group) + 
+  geom_text_repel(data = outliers, aes(label = Isolate)) + 
+  guides(colour = guide_legend(override.aes = list(alpha = 1)),
+         shape="none") +   #  guide_legend  , alpha="none"
+  # scale_fill_brewer(palette = "RdYlGn", direction = -1) +
+  # scale_fill_paletteer_d("RColorBrewer", "RdYlGn", direction = -1 ) + # ggsci, category10_d3
+  scale_shape_manual(values = shapes) +
+  # scale_color_manual(values=seq_cols) +
+  # # scale_size_continuous(range = c(3,6)) +
+  # guides(shape = guide_legend(override.aes = list(size = 5 , fill=pal[2], color="grey15"), order = 1),  #, #
+  #        fill = guide_legend(override.aes = list(shape = 21))) +   #  guide_legend(override.aes = list(size = 5, pch=shapes[1]), order = 2)
+  # plot_theme(baseSize = 20) + #  size="Year",
+  labs( x=glue::glue("C{plot_comps[1]}: {round(percentVar[plot_comps[1]]*100,2)}% variance"),
+        y=glue::glue("C{plot_comps[2]}: {round(percentVar[plot_comps[2]]*100,2)}% variance")) +
+  pale_theme$theme
+
+ggplotly(pca_12) %>% hide_legend()
+
+
+```
+
+```{r PCA-3D-plotly, eval=TRUE, warning=FALSE, echo=FALSE, out.width="100%"}
+selected_isolates <- c("AR0210", "AR0128", "AR0022", "TR6417", "AR0212", "AR0023", "AR0020", 
+                       "TR9571", "AR0226", "AR0237") # "AR0016", "AR0018",
+# interactive 3D plotly 
+t <- list(family = "sans serif",size = 14,  color = toRGB("grey50"))
+
+NNSW_pca <- pca_data %>% filter(Isolate %in% hayley_isolates$Isolate) %>% 
+  mutate(Selected = ifelse(Isolate %in% selected_isolates, "Yes", "No"),
+         Label = ifelse(Isolate %in% selected_isolates, Isolate, NA))
+
+plot_ly(x=NNSW_pca$Axis1, y=NNSW_pca$Axis2, z=NNSW_pca$Axis3, type="scatter3d", mode="markers", 
+        color=NNSW_pca$Patho.Group, symbol = NNSW_pca$Selected, symbols = c(15,17),
+        text = NNSW_pca$Label,
+        colors = my_colours$Patho.Group , hoverinfo=NNSW_pca$Isolate) %>% hide_legend() %>% 
+        add_text(textfont = t, textposition = "top right")
+
+```
 
 ### Variant Annotation
 Variants were then further filtered to keep only polymorphic and bi-allelic SNPs using the `r fontFmt("VariantAnnotation")` v`r packageVersion("VariantAnnotation")` and `r fontFmt("GenomicRanges")` v`r packageVersion("GenomicRanges")` R Bioconductor packages [@obenchain_variantannotation:_2014; @lawrence_software_2013]. The SNPs were annotated and position of each variant relative to gene locations was determined (coding/intron/promotor/intergenic), based on the reference genome and gene models of _A. rabiei_ strain _Me14_ (where the contig names were shortened to remove the `Arab_Me14` prefix). 

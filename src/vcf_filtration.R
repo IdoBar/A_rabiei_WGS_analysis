@@ -96,7 +96,7 @@ vcf_filtration <- function(vcf_file, miss_rates = seq(0.2, 0.1, -0.05), geno_mis
 
   # unlink(clean_vcf_file)
   # Copy the header into a new file
-  system2("grep", args=c("'^##'", vcf_file), stdout = clean_vcf_file)
+  system2("grep", args=c("'^##'",  sub("(.+)", "'\\1'", vcf_file)), stdout = clean_vcf_file)
   if (file.exists(clean_vcf_file)) readr::write_tsv(clean_vcf, clean_vcf_file, append = TRUE, col_names = TRUE)
 
   # completed_tasks <<- 1
