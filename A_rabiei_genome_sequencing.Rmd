@@ -1,7 +1,7 @@
 ---
 title: "Whole Genome Sequencing of *Ascochyta rabiei* Isolates (2020)"
 author: "Ido Bar"
-date: "11 April 2021"
+date: "11 July 2022"
 always_allow_html: yes
 output: 
     # md_document:
@@ -22,7 +22,7 @@ output:
       number_sections: false
       code_folding: hide
 #      keep_md: true
-# bibliography: style/Fungal_genomes.bib
+bibliography: style/Fungal_genomes.bib
 csl: style/springer-basic-improved-author-date-with-italic-et-al-period.csl
 ---
 
@@ -33,9 +33,10 @@ knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
 # CRAN settings
 chooseCRANmirror(ind=1)
 options(repos = getOption("repos")["CRAN"]) # fix the annoying "unable to access index..."
-pacman::p_load(tidyverse, readxl, scales, paletteer, 
-               htmltools, ggrepel, here,  DT, captioner, plotly,
+pacman::p_load(tidyverse, readxl, scales, paletteer, VariantAnnotation, cn.mops,
+               htmltools, ggrepel, here,  DT, plotly, mmod, poppr, circlize,
                tabulizer)
+pacman::p_load_gh('Mikata-Project/ggthemr')
 # Connect to Zotero to access references
 # biblio <- ReadBib("data/Fungal_genomes.bib") # , "bibtex", "RefManageR"
 # Font Format
@@ -50,16 +51,7 @@ fontFmt = function(x,font="consolas"){
 }
 ```
 
-
-
-```{r captions, include=FALSE, eval=TRUE}
-figs <- captioner(prefix="Figure")
-tbls <- captioner(prefix="Table")
-tbls(name="samples",HTML("<i>Ascochyta rabiei</i> samples used in this study."))
-tbls(name="mapping_rates", HTML("Mapping rates of the WGS reads to the <i>Ascochyta rabiei</i> Me14 reference genome."))
-tbls(name="mapping_sum", "Mapping statistics for 2021 sequencing batches.")
-figs(name="GC_cont", "GC (%) content in trimmed WGS reads.")
-
+```{r prepare-data, include=FALSE, eval=TRUE}
 # selected_isolates_file <-
 #   here("../samples_db/data/Ascochyta_rabiei_200_selection_2020.xlsx")
 # selected_samples <- read_excel(selected_isolates_file,
@@ -90,10 +82,14 @@ samples_table <- readxl::read_excel(here("sample_info/Summary_tables_AR_2020.xls
 ```
 
 # Experimental Design
-In 2021, DNA was extracted from 197 isolates of _Ascochyta rabiei_ and sent for Whole-Genome-Sequencing (WGS) at the Australian Genome Research Facility (AGRF, Melbourne) on 1 lane of a NovaSeq flowcell, producing 150 bp paired-end reads (run name CAGRF20114478).  
-Details of the sequenced isolates is provided in (`r tbls(name="samples",display="cite")`).
 
-```{r samples_table, eval=TRUE} 
+DNA was extracted from 197 isolates of *Ascochyta rabiei* (collected in 2020) and sent for Whole-Genome-Sequencing (WGS) at the Australian Genome Research Facility (AGRF, Melbourne) on 1 lane of a NovaSeq flowcell, producing 150 bp paired-end reads (run name CAGRF20114478).\
+Details of the sequenced isolates is provided in (Table \@ref(tab:samples-table)).
+
+```{r samples-table, eval=FALSE, results='asis', echo=FALSE, out.width="100%"}
+# create table caption hook
+DT_caption("samples-table", HTML("<i>Ascochyta rabiei</i> samples used in this study."))
+
 datatable(samples_table, caption=tbls("samples"), rownames = FALSE) %>% # , 
           # options = list(dom = 'tf', pageLength = 40)) %>%
   formatStyle('Path_rating',
@@ -102,35 +98,42 @@ datatable(samples_table, caption=tbls("samples"), rownames = FALSE) %>% # ,
 ```
 
 # Aims
-* Identify strain-unique variants to develop detection methods
-* Associate aggressiveness with specific variants
+
+-   Identify strain-unique variants to develop detection methods
+-   Associate aggressiveness with specific variants
 
 # Analysis Pipeline
+
 ## General overview:
-1. Data pre-processing:
-    a. Quality check
-    b. Adaptor trimming
-    c. Post-trim quality check
-2. Mapping reads to a reference genome 
-3. Reads deduplication
-4. Variant calling and filtration
-5. Variant annotation (including assigning SSR haplotypes)
-6. Variant-Pathogenicity association
-7. Produce variant statistics and assessment 
+
+1.  Data pre-processing:
+    a.  Quality check
+    b.  Adaptor trimming
+    c.  Post-trim quality check
+2.  Mapping reads to a reference genome
+3.  Reads deduplication
+4.  Variant calling and filtration
+5.  Copy number variation calling
+6.  Variant annotation (including assigning SSR haplotypes)
+7.  Variant-Pathogenicity association
+8.  Produce variant statistics and assessment
 
 ## Methods
-DNA-Seq data processing, mapping and variant calling were performed on the _QCIF Awoonga HPC Cluster_ (using PBSPro scheduler), using [`r fontFmt("Snippy")` v4.6.0](https://github.com/tseemann/snippy), a rapid haploid variant calling and core genome alignment. The pipeline uses `r fontFmt("FreeBayes")` v1.3.5 [@garrison_haplotype-based_2012] and other tools to assign variant probability scores and call variants.  
 
-Consider the following options for file download and processing:  
+WGS data processing, mapping and variant calling were performed on the *QCIF Awoonga* and *Griffith Gowonda* HPC Clusters (using PBSPro scheduler), using [`r fontFmt("Snippy")` v4.6.0](https://github.com/tseemann/snippy), a rapid haploid variant calling and core genome alignment. The pipeline uses `r fontFmt("FreeBayes")` v1.3.5 [@garrison2012] and other tools to assign variant probability scores and call variants.
 
-1. Download and perform all processing on the compute node `$TMPDIR` (limited to 20GB), then cleanup (using `--cleanup` in `r fontFmt("Snippy")`) and copy just the important results (`fastq.genozip` files, QC reports and `r fontFmt("Snippy")` results) to scratch folder `(30days` or `90days` on Awoonga) and into CloudStor (with `rclone`)  
-2. Download and perform all processing on scratch folder (`30days` or `90days` on Awoonga), then cleanup and upload into CloudStor.  
+Consider the following options for file download and processing:
 
-At the current pipeline, all processing is done at the the read files were downloaded and then following a standard naming conventions (to start from a pair of `SampleID_R#.fastq.gz` file), to make it much easier to process all files with the same script, using parameters to specify batch name, read length, sequencing platform and other potential variables.   
+1.  Download and perform all processing on the compute node `$TMPDIR` (limited to 20GB), then cleanup (using `--cleanup` in `r fontFmt("Snippy")`) and copy just the important results (`fastq.genozip` files, QC reports and `r fontFmt("Snippy")` results) to `scratch` folder and into CloudStor (with `rclone`)\
+2.  Download and perform all processing on `scratch` folder , then cleanup and upload into CloudStor.
+
+At the current pipeline, all processing is done at the the read files were downloaded and then following a standard naming conventions (to start from a pair of `SampleID_R#.fastq.gz` file), to make it much easier to process all files with the same script, using parameters to specify batch name, read length, sequencing platform and other potential variables.\
 Detailed methods, including code for running each of the analyses steps are provided in the associated [A_rabiei_WGS_analysis GitHub repository](https://github.com/IdoBar/A_rabiei_WGS_analysis/tree/2020_samples).
 
 ### Data pre-processing
+
 Install needed software in a `conda` environment on the new Gowonda HPC cluster.
+
 ```{bash setup_tools}
 # download conda
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
@@ -184,6 +187,7 @@ genozip --make-reference $GENOME.fa
 ```
 
 Download the list of raw `.fastq.gz` files from AGRF and upload to CloudStor.
+
 ```{bash retrieve_files}
 mkdir -p $WORK_DIR
 cd !$
@@ -208,15 +212,17 @@ rclone copy -P --max-depth 1  CloudStor:Shared/GRIFFITH-Ford-Crop-Genetics-Lab/A
 ```
 
 #### Adaptor Trimming
-Adaptors needed to be removed, as well as very low quality bases/reads, so trimming was performed with `r fontFmt("fastp")` v0.20.1, which also produced QC figures and reports.  
-Raw files quality after adaptor trimming was assessed with `r fontFmt("FastQC")` v0.11.8.
 
-#### Mapping to the reference genome and calling variants (using Snippy)
-The trimmed reads were mapped to the _A. rabiei_ reference genome, strain Me14 ([GCA_004011695.1](https://www.ncbi.nlm.nih.gov/assembly/GCA_004011695.1)) using `r fontFmt("Snippy")` v4.6.0. [Snippy](https://github.com/tseemann/snippy) is a wrapper that makes use of popular bioinformatics tools, such as `r fontFmt("bwa-mem")` v0.7.17-r1188 to map the reads to the reference genome, followed by several commands of `r fontFmt("samtools")` v1.12 to specify a Read Group for each sample (provided to Snippy with the `--rgid` flag), mark duplicates and convert the alignments into coordinate-sorted, indexed BAM files.  
-The alignment files are then processed by `r fontFmt("Freebayes")` v1.3.5 to call variants from all samples and `r fontFmt("bcftools")` v1.12 and `r fontFmt("snpEff")` v5.0 to filter and annotate the variants and retain only high-quality variants (based on minimum depth and genotype quality thresholds) that are common to all samples and referred to as **core SNPs**.  
-Mapping statistics were obtained with `r fontFmt("Qualimap")` v.2.2.2-dev [@okonechnikov_qualimap_2016] and consolidated along with pre and post-trimming QC measures into a single, interactive report for each batch using `r fontFmt("MultiQC")` v1.10.1 [@ewels_multiqc:_2016]. 
+Adaptors needed to be removed, as well as very low quality bases/reads, so trimming was performed with `r fontFmt("fastp")` v0.20.1, which also produced QC figures and reports.\
+Raw files quality after adaptor trimming was assessed with `r fontFmt("FastQC")` v0.11.8 [@chen2018; @andrews2014].
 
-*Processing of the files was done on Awoonga/Griffith HPC clusters*
+### Mapping to the reference genome and calling variants (using Snippy)
+
+The trimmed reads were mapped to the *A. rabiei* reference genome, strain Me14 ([GCA_004011695.1](https://www.ncbi.nlm.nih.gov/assembly/GCA_004011695.1)) using `r fontFmt("Snippy")` v4.6.0. [Snippy](https://github.com/tseemann/snippy) is a wrapper that makes use of popular bioinformatics tools, such as `r fontFmt("bwa-mem")` v0.7.17-r1188 [@li2013] to map the reads to the reference genome, followed by several commands of `r fontFmt("samtools")` v1.12 [@li2009] to specify a Read Group for each sample (provided to Snippy with the `--rgid` flag), mark duplicates and convert the alignments into coordinate-sorted, indexed BAM files.\
+The alignment files are then processed by `r fontFmt("Freebayes")` v1.3.5 [@garrison2012] to call variants from all samples and `r fontFmt("bcftools")` v1.12 and `r fontFmt("snpEff")` v5.0 [@cingolani2012] to filter and annotate the variants and retain only high-quality variants (based on minimum depth and genotype quality thresholds) that are common to all samples and referred to as **core SNPs**.\
+Mapping statistics were obtained with `r fontFmt("Qualimap")` v.2.2.2-dev [@okonechnikov2016] and consolidated along with pre and post-trimming QC measures into a single, interactive report for each batch using `r fontFmt("MultiQC")` v1.10.1 [@ewels2016] (see [MultiQC report](raw_data/QC_11_10_2021_multiqc_report.html).
+
+*Processing of the files was done on QCIF Awoonga/Griffith Gowonda HPC clusters*
 
 ```{bash trim_reads_snippy_AGRF}
 # work on Awoonga (because Griffith HPC can't download the fastq files directly...)
@@ -386,11 +392,10 @@ rm raw.sam raw_R*.fq.gz
 # Done!
 ```
 
+### Mapping to the updated reference genome
 
-#### Mapping to the updated reference genome 
-Reads are mapped to the *A. rabiei* reference genome assembled and annotated by Fredrick Mobegi (the CCDM, Curtin University, add NCBI accession when available) using `r fontFmt("bwa-mem2")` v2.2.1 [@vasimuddinEfficientArchitectureAwareAcceleration2019]. The alignment files were then coordinate-sorted and had PCR duplicates marked using `bamsormadup` from `r fontFmt("biobambam2")` v2.0.182 [@tischlerBiobambamToolsRead2014].  
+Reads are mapped to the *A. rabiei* reference genome assembled and annotated by Dr. Fredrick Mobegi (the CCDM, Curtin University, add NCBI accession when available) using `r fontFmt("bwa-mem2")` v2.2.1 [@vasimuddin2019]. The alignment files were then coordinate-sorted and had PCR duplicates marked using `bamsormadup` from `r fontFmt("biobambam2")` v2.0.182 [@tischler2014].\
 To improve performance, temporary files were written to a local `lscratch` folder on the computing node.
-
 
 ```{bash prep_updated_genomes}
 REF_DIR=$HOME/data/reference_genomes/Ascochyta_reference_genomes/Updated_ME14_reference_and_annotations # on Griffith HPC
@@ -405,6 +410,7 @@ samtools faidx $GENOME.fa
 ```
 
 Prepare and run the pipeline to trim the reads
+
 ```{bash trim_reads_combined}
 WORK_DIR=$HOME/scratch/A_rabiei_WGS_2021
 CONDA_NAME=/export/home/s2978925/miniconda3/envs/snippy
@@ -413,7 +419,7 @@ BBMAP_REF=$(find $CONDA_PREFIX -wholename "*resources/adapters.fa")
 # Prepare the commands
 DATE=`date +%d_%m_%Y`
 BATCH=All_2018_2020
-RUN="${BATCH}_${DATE}" # day of run was 02_02_2019
+RUN="${BATCH}_${DATE}" # day of run was 30_09_2021
 RUN_DIR=$WORK_DIR/${RUN}
 mkdir -p $RUN_DIR
 cd $RUN_DIR
@@ -532,8 +538,12 @@ STEP_SIZE=5 # the processing is very quick (<20 minutes) and it would be more ef
 QUALIMAP=$(qsub -J1-$(cat $RUN_DIR/qualimap_bamqc.cmds | wc -l):$STEP_SIZE -l select=1:ncpus=8:mem=16GB,walltime=2:00:00 -N qualimap_bamqc -v "CMDS_FILE=$RUN_DIR/qualimap_bamqc.cmds","WORKDIR=$RUN_DIR","STEP_SIZE=$STEP_SIZE" ${WORK_DIR}/parallel_array.pbspro | egrep -o "^[0-9]+")
 
 
-# Multi-bamqc: create/copy a file describing the sample names (sample_info.txt) to the parent folder and use it in qualimap 
-# QUALIMAP=$( echo "cd $RUN_DIR ; source ~/.bashrc; conda activate $CONDA_NAME; unset DISPLAY ; ls -1 *.csorted.bam | gawk '{sample_name=gensub(/.csorted.bam/, \"\", \$1); printf \"%s\t%s\n\", sample_name, \$1}'  > $QUALIMAP_JOB.samples ; qualimap multi-bamqc --java-mem-size=4G -r -c -gff $GENOME.bed -d $QUALIMAP_JOB.samples -outformat PDF:HTML -outdir $QUALIMAP_JOB " | qsub -V -l select=1:ncpus=${NCORES}:mem=32GB,walltime=5:00:00 -N ${QUALIMAP_JOB:0:11} | egrep -o "^[0-9]+")
+#  Multi-bamqc: create/copy a file describing the sample names (sample_info.txt) to the parent folder and use it in qualimap 
+
+find `pwd` -name "*_bamqc" | gawk '{sample_name=gensub(/.+\/(.+)_bamqc/, "\\1", $1); printf "%s\t%s\n", sample_name, $1}' > multibamqc.samples
+ 
+
+QUALIMAP_MULTI=$( echo "cd $RUN_DIR ; source ~/.bashrc; conda activate $CONDA_NAME; unset DISPLAY ; find `pwd` -name \"*_bamqc\" | gawk '{sample_name=gensub(/.+\/(.+)_bamqc/, \"\\\1\", \$1); printf \"%s\t%s\n\", sample_name, \$1}' > multibamqc.samples ; qualimap multi-bamqc --java-mem-size=4G -d multibamqc.samples -outformat PDF:HTML -outdir ${BATCH}_bamqc " | qsub -V -l select=1:ncpus=${NCORES}:mem=32GB,walltime=5:00:00 -N ${QUALIMAP_JOB:0:11} | egrep -o "^[0-9]+")
 
 # remove empty log files
 find . -type f -size 0 -name "${RUN:0:11}.*" -exec rm {} +
@@ -558,8 +568,99 @@ rm raw.sam raw_R*.fq.gz
 # Done!
 ```
 
+#### Mapping QC
 
-#### Calling variants (using Freebayes)
+Error rates were estimated by individually processing the duplicate samples and assessing the rate of mismatch variant calls within replicates of the same isolate.   
+*To process mapping table, copy the `multisampleBamQcReport.html` file from the server to the local analysis folder*
+
+```{r snippy_stats, eval=FALSE, echo=FALSE, include=FALSE}
+analysis_basename <- "A_rabiei_2018"
+analysis_name <- "Snippy_multi_17_07_2019"
+analysis_folder <- file.path("..", analysis_name)
+variant_method <- "snippy"
+# analysis_folder <- "../FB_vars_01_03_2019"
+# analysis_outdir <- glue("./output/{variant_method}/")
+error_rates <- readxl::read_excel("output/results/pipeline_comparison.xlsx", 
+                                  sheet = "Snippy_multi_07_07_2019") %>% 
+  select(-vcf_file)
+mean_allele_error <- mean(error_rates$allele_error_rate)
+stats_table <- read_tsv(file.path(analysis_folder,"core.txt")) 
+
+
+# mapping_table <- list.files(analysis_folder, ".bbmap.stats", full.names = TRUE) %>% map_df(read_tsv) %>% 
+#   mutate_at(vars(contains("mapped")),  ~as.numeric(sub("%", "", ., fixed=TRUE))/100) %>%
+#   mutate(Mapping_rate=rowMeans(.[,-1]), Mapping_tool = "BBmap (v38.22)", 
+#          Sample_id=str_extract(.$sample_id, paste(sequencing_table$Submission_id, collapse = "|"))) %>%
+#   group_by(Sample_id, Mapping_tool) %>%
+#   summarise(Mapping_rate=mean(Mapping_rate)) %>% ungroup() %>% 
+#   left_join(sequencing_table,by=c("Sample_id"="Submission_id")) %>%
+# # mutate( Isolate=sequencing_dict[sample_id]) %>% 
+#   dplyr::select(Isolate, Mapping_rate, Mapping_tool, Sample_id, Sequencing_Centre) 
+
+# Load qualimap statistics (copy summary html files to raw_data folder)
+
+qualimap_files <- list.files(analysis_folder, "multisampleBamQcReport.html", 
+                             full.names = TRUE, 
+                             recursive = TRUE)
+exclude_columns <- c("Coverage std", "Insert size median")
+  # mutate(`Pathog. Group`=samples_table$Pathogenicity[match(samples_table$Isolate, .$Isolate)] ) 
+qualimap_results <-  qualimap_files[1] %>% map_df(~htmltab(., which = "//td/b[text() = 'Sample name']/ancestor::table")) %>% 
+  rename(Isolate=`Sample name`, Coverage=`Coverage mean`) %>% 
+  dplyr::select(-one_of(exclude_columns)) %>% 
+  mutate_at(.vars = vars(-starts_with("Isolate")), .funs = as.numeric) %>%
+  left_join(., error_rates %>% select(Isolate=replicate_group, Error_rate=allele_error_rate,
+                                       Replicates=replicate_num)) %>%
+  arrange(Isolate, desc(Coverage)) %>% set_names(., gsub(" ", "_", colnames(.))) %>%
+  # dplyr::select(Isolate, GC_percentage, Mapping_quality_mean, Mapping_rate, Coverage, Mapping_tool, Sample_id, Sequencing_Centre) %>%
+  write_csv(filedate(glue::glue("{analysis_basename}_{analysis_name}.mapping.stats"), ".txt", "./output/results", dateformat = FALSE))
+
+# Summarise mapping results
+# mapping_summary <- qualimap_results %>% filter(Coverage>20) %>% 
+#   group_by(Sequencing_Centre) %>% 
+#   summarise(Coverage=sprintf("x%.2f",mean(Coverage)), 
+#             Mapping_rate=sprintf("%.2f%%", mean(Mapping_rate, na.rm=TRUE)*100),
+#                                      Mapping_qual=round(mean(Mapping_quality_mean), 2),
+#             Files=n()) %>%
+#   # mutate(Reads_per_file=format(c(2224642.64, 36500108.00), 
+#   #                              digits = 2, scientific = TRUE)) %>%
+#   arrange(desc(Sequencing_Centre)) %>% 
+#   write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.sum"), ".txt", "./output/results", dateformat = FALSE))
+
+```
+
+Samples with less than 20% mapping and x15 coverage were removed from the rest of the analysis (see highlighted rows in Table \@ref(tab:mapping-table) and more details in the [MultiQC report](raw_data/QC_11_10_2021_multiqc_report.html)).
+
+```{r map_stats, eval=FALSE, results='asis', echo=FALSE, out.width="100%"}
+# insert table caption hook
+DT_caption("mapping-table", HTML("Mapping rates of the WGS reads to the <i>Ascochyta rabiei</i> Me14 reference genome."))
+# prepare and present  table
+datatable(as.data.frame(qualimap_results), # %>% mutate_if(is.numeric, ~round(., 2))),
+          caption=tbls("mapping_rates")) %>% #, 
+  formatRound(~Coverage+GC_percentage+Mapping_quality_mean) %>% 
+  formatPercentage('Error_rate', 2) %>% 
+          # options = list(dom = 'tf', pageLength = 40)) %>%
+  formatStyle("Coverage", target = "row",
+  backgroundColor = styleInterval(c(10,20), c('#ef3125', '#feed95', NA))
+)
+
+# pander(as.data.frame(qualimap_results), caption=tbls("mapping_rates"), justify="left")
+
+# datatable(as.data.frame(mapping_stats), caption = tbls("mapping_rates"), # , width=10
+#           style="default", rownames = FALSE, autoHideNavigation=TRUE) %>% 
+#   formatPercentage('Mapping_rate', 2) %>% #formatStyle('Isolate',
+#   formatStyle('Mapping_rate',
+#     color = styleInterval(c(0.05, 0.5), c('yellow', 'blue', 'black')),
+#     backgroundColor = styleInterval(c(0.05, 0.5), c('red', 'yellow',NA))
+#   )
+```
+
+
+```{r QC-GC, eval=FALSE, echo=FALSE, out.width='100%', fig.cap="GC (%) content in trimmed WGS reads."}
+include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
+```
+
+### Calling variants (using Freebayes)
+
 ```{bash freebayes}
 PLOIDY=1
 DATE=`date +%d_%m_%Y`
@@ -642,98 +743,182 @@ rm $FB.cmds.p*.*
 
 ```
 
+### Genome-wide Copy Number Variation
 
-Samples with less than 20% mapping and x15 coverage were removed from the rest of the analysis (see highlighted rows in `r tbls(name="mapping_rates",display="cite")`).  
+The Illumina sequencing data was also used to identify regions that vary in their copy number in the genomes of each isolate. An overview and comparison of copy number variation (CNV) calling approaches can be found in [@gabrielaite2021; @coutelier2022].
 
-Error rates were estimated by individually processing the duplicate samples and assessing the rate of mismatch variant calls within replicates of the same isolate.
-_To process mapping table, copy the `multisampleBamQcReport.html` file from the server to the local analysis folder_
+We performed CNV analysis using several methods:
 
-```{r snippy_stats, eval=FALSE, echo=FALSE, include=FALSE}
-analysis_basename <- "A_rabiei_2018"
-analysis_name <- "Snippy_multi_17_07_2019"
-analysis_folder <- file.path("..", analysis_name)
-variant_method <- "snippy"
-# analysis_folder <- "../FB_vars_01_03_2019"
-# analysis_outdir <- glue("./output/{variant_method}/")
-error_rates <- readxl::read_excel("output/results/pipeline_comparison.xlsx", 
-                                  sheet = "Snippy_multi_07_07_2019") %>% 
-  select(-vcf_file)
-mean_allele_error <- mean(error_rates$allele_error_rate)
-stats_table <- read_tsv(file.path(analysis_folder,"core.txt")) 
+#### Hecaton
 
+`r fontFmt("Hecaton")` (a [modified workflow](https://github.com/IdoBar/hecaton) based on v0.5.1) is a computational workflow that integrates the results of different algorithms that utilise the sequencing depth and break points (paired reads that don't overlap properly) at a region, as well as the allelic ratio (if a region appears to be heterozygote it must be duplicated in a haploid genome) [@wijfjes2019].\
 
-# mapping_table <- list.files(analysis_folder, ".bbmap.stats", full.names = TRUE) %>% map_df(read_tsv) %>% 
-#   mutate_at(vars(contains("mapped")),  ~as.numeric(sub("%", "", ., fixed=TRUE))/100) %>%
-#   mutate(Mapping_rate=rowMeans(.[,-1]), Mapping_tool = "BBmap (v38.22)", 
-#          Sample_id=str_extract(.$sample_id, paste(sequencing_table$Submission_id, collapse = "|"))) %>%
-#   group_by(Sample_id, Mapping_tool) %>%
-#   summarise(Mapping_rate=mean(Mapping_rate)) %>% ungroup() %>% 
-#   left_join(sequencing_table,by=c("Sample_id"="Submission_id")) %>%
-# # mutate( Isolate=sequencing_dict[sample_id]) %>% 
-#   dplyr::select(Isolate, Mapping_rate, Mapping_tool, Sample_id, Sequencing_Centre) 
+```{bash hecaton}
+# prepare Hecaton
+source ~/.proxy 
+cd ~/.nextflow/assets/IdoBar
+git clone https://github.com/IdoBar/hecaton.git
 
-# Load qualimap statistics (copy summary html files to raw_data folder)
+WORK_DIR=$HOME/scratch/A_rabiei_WGS_2021
+GENOME_DIR="$HOME/data/reference_genomes/Ascochyta_reference_genomes/ArME14_v2"
+GENOME="ArME14.v2.fasta"
+HECATON_HOME="$HOME/.nextflow/assets/IdoBar/hecaton"
+FQ_DIR="$WORK_DIR/All_2018_2020_30_09_2021"
 
-qualimap_files <- list.files(analysis_folder, "multisampleBamQcReport.html", 
-                             full.names = TRUE, 
-                             recursive = TRUE)
-exclude_columns <- c("Coverage std", "Insert size median")
-  # mutate(`Pathog. Group`=samples_table$Pathogenicity[match(samples_table$Isolate, .$Isolate)] ) 
-qualimap_results <-  qualimap_files[1] %>% map_df(~htmltab(., which = "//td/b[text() = 'Sample name']/ancestor::table")) %>% 
-  rename(Isolate=`Sample name`, Coverage=`Coverage mean`) %>% 
-  dplyr::select(-one_of(exclude_columns)) %>% 
-  mutate_at(.vars = vars(-starts_with("Isolate")), .funs = as.numeric) %>%
-  left_join(., error_rates %>% select(Isolate=replicate_group, Error_rate=allele_error_rate,
-                                       Replicates=replicate_num)) %>%
-  arrange(Isolate, desc(Coverage)) %>% set_names(., gsub(" ", "_", colnames(.))) %>%
-  # dplyr::select(Isolate, GC_percentage, Mapping_quality_mean, Mapping_rate, Coverage, Mapping_tool, Sample_id, Sequencing_Centre) %>%
-  write_csv(filedate(glue::glue("{analysis_basename}_{analysis_name}.mapping.stats"), ".txt", "./output/results", dateformat = FALSE))
+DATE=`date +%d_%m_%Y`
+RUN=Hecaton_all_${DATE} # day of run was 05_07_2021
+mkdir -p $WORK_DIR/${RUN}
+cd !$
 
-# Summarise mapping results
-# mapping_summary <- qualimap_results %>% filter(Coverage>20) %>% 
-#   group_by(Sequencing_Centre) %>% 
-#   summarise(Coverage=sprintf("x%.2f",mean(Coverage)), 
-#             Mapping_rate=sprintf("%.2f%%", mean(Mapping_rate, na.rm=TRUE)*100),
-#                                      Mapping_qual=round(mean(Mapping_quality_mean), 2),
-#             Files=n()) %>%
-#   # mutate(Reads_per_file=format(c(2224642.64, 36500108.00), 
-#   #                              digits = 2, scientific = TRUE)) %>%
-#   arrange(desc(Sequencing_Centre)) %>% 
-#   write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.sum"), ".txt", "./output/results", dateformat = FALSE))
+# prepare reference genome
+conda activate aDNA
+ln -s $GENOME_DIR/$GENOME ./
+bash $HECATON_HOME/bash/preprocess.sh $GENOME
+picard CreateSequenceDictionary R=$GENOME O=$GENOME.dict
+conda deactivate
+
+# prepare read files
+mkdir fastq_dir
+printf "AR0106\nAR0107\nAR0113\nAR0118\n11\n5B\n2\n15CUR005\nAGRF_18\nAGRF_08\nF15023\n20" > ignore_samples.txt
+IGNORE_RE=$(awk '{printf "/%s_R|",$1}' ignore_samples.txt | sed 's/|$//')
+# perform adapter trimming (fastp) 
+ls -1 $FQ_DIR/*.fastq.gz  | egrep -v $IGNORE_RE | sort | parallel -k --dry-run ln -s {} fastq_dir/
+
+# run Hecaton
+conda activate nf
+nextflow run -with-singularity ~/.singularity/cache/hecaton_latest.sif -c ~/.nextflow/GU.config -profile gowonda -w hecaton_workdir $HOME/.nextflow/assets/IdoBar/hecaton/nextflow/hecaton.nf --genome_file $GENOME --reads "fastq_dir/*_R{1,2}.fastq.gz" --manta_config $HECATON_HOME/docker/configManta_weight_1.py.ini --output_dir hecaton_output --model_file $HECATON_HOME/models/random_forest_model_concat_A_thaliana_ColxCvi_O_sativa_Suijing18_coverage_10x_insertions_balanced_subsample.pkl -resume
+
+# add read depth and convert to vcf
+# prepare input file 
+find `pwd`/hecaton_output/aligned_reads/*.bam | egrep -v "discordants|splitters" | sort | gawk '{sample_name=gensub(/.+\/(.+).bam/, "\\1", $1); printf "%s\t%s\n", sample_name, $1}' > bam_inputs.tsv
+
+find `pwd`/hecaton_output/random_forest_calls -name "*unfiltered.bedpe" | sort | gawk '{sample_name=gensub(/.+\/(.+)_probabilities.+.bedpe/, "\\1", $1); printf "%s\t%s\n", sample_name, $1}' > unfiltered.bedpe.files
+# join the tables
+# awk 'NR==FNR{a[$3,$4]=$1OFS$2;next}{$6=a[$1,$2];print}' OFS='\t' fileb filea
+# awk 'NR==FNR{a[$1]=$3; next} ($7 in a) {print $0, a[$7]}' TableB TableA > TableC
+join -1 1 -t $'\t' -o 1.1,1.2,2.2 <(sort bam_inputs.tsv -k1) <(sort unfiltered.bedpe.files -k1) > bed2vcf_input_files.tsv
+
+# run the pipeline and combine VCFs
+nextflow run -with-singularity ~/.singularity/cache/hecaton_latest.sif -c ~/.nextflow/GU.config -profile gowonda $HOME/.nextflow/assets/IdoBar/hecaton/nextflow/add_read_depth.nf --input bed2vcf_input_files.tsv --fasta $GENOME --outdir duphold_unfiltered_output --merge -resume
 
 ```
 
-```{r map_stats, eval=FALSE}
-datatable(as.data.frame(qualimap_results), # %>% mutate_if(is.numeric, ~round(., 2))),
-          caption=tbls("mapping_rates")) %>% #, 
-  formatRound(~Coverage+GC_percentage+Mapping_quality_mean) %>% 
-  formatPercentage('Error_rate', 2) %>% 
-          # options = list(dom = 'tf', pageLength = 40)) %>%
-  formatStyle("Coverage", target = "row",
-  backgroundColor = styleInterval(c(10,20), c('#ef3125', '#feed95', NA))
+#### cn.MOPS
+
+`r fontFmt("cn.MOPS")` (v`r packageVersion("cn.mops")`) is a Bioconductor R package that models the depth of coverage distribution across samples in each genomic loci and applies a Bayesian approach to infer integer copy number for each location [@klambauer2012].\
+    See the `cn.mops.R` [Gist](https://gist.github.com/IdoBar/0d39c714469219abf7932d2c1666ed25) for an example of the workflow.
+
+```{bash cn-mops}
+# setup R environment on the cluster
+CONDA_NAME=snippy
+conda activate $CONDA_NAME
+mamba install bioconductor-cn.mops r-biocmanager r-tidyverse r-optparse
+# install missing package
+Rscript "BiocManager::install('GenomeInfoDbData')"
+
+# prepare the work folder
+WORK_DIR=$HOME/scratch/A_rabiei_WGS_2021
+BAM_DIR="$WORK_DIR/All_2018_2020_30_09_2021"
+PLOIDY=1
+DATE=`date +%d_%m_%Y`
+RUN=cnMOPS_all_${DATE} # day of run was 06_07_2021
+mkdir -p $WORK_DIR/${RUN}
+cd !$
+# JOB_NAME="BBmap_me14_vars"
+
+NCORES=8
+
+mkdir bam_files
+ln -s $BAM_DIR/*.csorted.bam* bam_files/
+
+# download the PBS Rscript
+wget https://gist.githubusercontent.com/IdoBar/0d39c714469219abf7932d2c1666ed25/raw/64e3057703e7c1a4a12bcc6d619d56a9308dcf73/cn.mops.R
+
+# send the job to the cluster
+CNMOPS_JOB=$( echo "source ~/.bashrc; conda activate $CONDA_NAME; cd $PWD; set -Eeo pipefail; Rscript cn.mops.R -i bam_files -o output " | qsub -V -l select=1:ncpus=${NCORES}:mem=32GB,walltime=5:00:00 -N cn_MOPS | egrep -o "^[0-9]+")
+
+
+
+
+```
+
+Alternatively, `r fontFmt("cn.MOPS")` can be run on the HPC by starting R and running the following:
+
+```{r cn-mops-r}
+library(cn.mops)
+library(tidyverse)
+library(optparse)
+ 
+option_list = list(
+  make_option(c("-i", "--input_dir"), type="character", default=NULL, 
+              help="input folder containing bams files", metavar="character"),
+    make_option(c("-o", "--out_dir"), type="character", default="output", 
+              help="output folder name [default= %default]", metavar="character"),
+    make_option(c("-t", "--threads"), type="character", default=as.integer(Sys.getenv("NCPUS")), 
+              help="number of parallel threads to use [default= %default]", metavar="integer")
 )
+ 
+opt_parser = OptionParser(option_list=option_list)
+opt = parse_args(opt_parser)
 
-# pander(as.data.frame(qualimap_results), caption=tbls("mapping_rates"), justify="left")
+if (is.null(opt$input_dir)){
+  print_help(opt_parser)
+  stop("At least one argument must be supplied (input dir).\n", call.=FALSE)
+}
 
-# datatable(as.data.frame(mapping_stats), caption = tbls("mapping_rates"), # , width=10
-#           style="default", rownames = FALSE, autoHideNavigation=TRUE) %>% 
-#   formatPercentage('Mapping_rate', 2) %>% #formatStyle('Isolate',
-#   formatStyle('Mapping_rate',
-#     color = styleInterval(c(0.05, 0.5), c('yellow', 'blue', 'black')),
-#     backgroundColor = styleInterval(c(0.05, 0.5), c('red', 'yellow',NA))
-#   )
+if (!dir.exists(opt$out_dir)) dir.create(opt$out_dir)
+bams <- list.files(opt$input_dir, ".+.bam$", full.names = TRUE)
+bam_names <- sub(".bam", "",  basename(bams))
+bamDataRanges <- getReadCountsFromBAM(bams, bam_names, parallel=as.integer(opt$threads)) # extract read counts from BAMs
+resHaplo <- haplocn.mops(bamDataRanges, parallel=as.integer(opt$threads)) # identify CN regions
+if (length(resHaplo@cnvs)==0) stop("No CNV regions detected, exiting.\n", call.=FALSE)
+results_haplo <- calcIntegerCopyNumbers(resHaplo) # convert to integer CN
+
+# plot outputs for each sample
+iwalk(bam_names, .f = ~{
+  png(file.path(opt$out_dir, glue::glue("cn_mops_{.x}_haplo.png")), width=1800, height=1200)
+		segplot(results_haplo, sampleIdx=.y)
+	dev.off()
+})
+
+# Haploid Results
+results_haplo_df <- as_tibble(cnvr(results_haplo)) %>%
+  # set_names(sub("^X", "", names(.))) %>% 
+  rename(chrom=seqnames) %>%
+				   mutate(name="", score=0, across(!1:5, .fns = ~as.integer(sub("CN", "", .x)))) %>% 
+  select(chrom, start, end,  name, score, strand, width, everything()) %>%
+				   arrange(chrom) %>% 
+  set_names(c("chrom", "start", "end", "name", "score", "strand", "width",bam_names))  
+# fix samples names (in case they started with a number)
+ 
+# save to file
+write_tsv(results_haplo_df, file="output/cn_mops_haplo_df.bed")
+
+
 ```
 
+#### Sarek
 
+`r fontFmt("Sarek")` (v2.7.2) is a Nextflow pipeline to call variants from WGS data using established tools and methods for data QC, alignment, variant calling, annotation and evaluation (such as BWA-MEM, Freebayes, GATK, Strelka2, and for CNV, Control-FREEC) [@garcia2020].
 
-```{r QC_GC, eval=FALSE, echo=FALSE, out.width='100%', fig.cap=figs("GC_cont")}
-include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
+```{bash sarek}
+PLOIDY=1
+DATE=`date +%d_%m_%Y`
+RUN=Sarek_all_${DATE} # day of run was 02_02_2019
+mkdir -p $WORK_DIR/${RUN}
+cd !$
+# JOB_NAME="BBmap_me14_vars"
+GENOME_DIR="$HOME/data/reference_genomes/Ascochyta_reference_genomes/ArME14_v2"
+NCORES=8
+
 ```
+
 
 ### Population Genetics
-The core SNPs were initially filtered by `r fontFmt("TASSEL")` [@BradburyTASSELsoftwareassociation2007] and then imported to R and were used to analyse the population structure using a range of popgen packages (`r fontFmt("adegenet")`, `r fontFmt("poppr")`, `r fontFmt("mmod")` and more) [@Jombartadegenet31new2011a; @KamvarPopprpackagegenetic2014; @WinterMMODlibrarycalculation2012].
 
-The SNP data was used to calculate a distance matrix between all samples, which was then used as inpur for principle component analysis (PCA). The PCA was plotted as an interactive `r fontFmt("plotly")` plot to allow exploration of the data and selection of isolates for further experiments/screening based on their phenotype, collection origin and genetic makeup.
+The core SNPs were initially filtered by `r fontFmt("TASSEL")` [@bradbury2007] and then imported to R and were used to analyse the population structure using a range of popgen packages (`r fontFmt("adegenet")` v`r packageVersion("adegenet")` , `r fontFmt("poppr")` v`r packageVersion("poppr")`, `r fontFmt("mmod")` v`r packageVersion("mmod")`) [@jombart2011; @lshtmdr1765; @kamvar2014; @winter2012]
+
+The SNP data was used to calculate a distance matrix between all samples, which was then used as input for principle component analysis (PCA). The PCA was plotted as an interactive `r fontFmt("plotly")` plot (v`r packageVersion("plotly")`) to allow exploration of the data and selection of isolates for further experiments/screening based on their phenotype, collection origin and genetic makeup.
 
 ```{r PCA-plotly, eval=TRUE, warning=FALSE, echo=FALSE, out.width="100%"}
 # select samples for Hayley
@@ -822,14 +1007,15 @@ plot_ly(x=NNSW_pca$Axis1, y=NNSW_pca$Axis2, z=NNSW_pca$Axis3, type="scatter3d", 
 ```
 
 ### Variant Annotation
-Variants were then further filtered to keep only polymorphic and bi-allelic SNPs using the `r fontFmt("VariantAnnotation")` v`r packageVersion("VariantAnnotation")` and `r fontFmt("GenomicRanges")` v`r packageVersion("GenomicRanges")` R Bioconductor packages [@obenchain_variantannotation:_2014; @lawrence_software_2013]. The SNPs were annotated and position of each variant relative to gene locations was determined (coding/intron/promotor/intergenic), based on the reference genome and gene models of _A. rabiei_ strain _Me14_ (where the contig names were shortened to remove the `Arab_Me14` prefix). 
+
+Variants were then further filtered to keep only polymorphic and bi-allelic SNPs using the `r fontFmt("VariantAnnotation")` v`r packageVersion("VariantAnnotation")` and `r fontFmt("GenomicRanges")` v`r packageVersion("GenomicRanges")` Bioconductor R packages [@obenchain2014; @lawrence2014; @lawrence2013]. The SNPs were annotated and position of each variant relative to gene locations was determined (coding/intron/promotor/intergenic), based on the reference genome and gene models of *A. rabiei* strain *Me14* (where the contig names were shortened to remove the `Arab_Me14` prefix).
 
 ```{bash fix_contig_names}
 cat A.rabiei_me14.fasta | sed 's/Arab_Me14_//' > A_rabiei_me14_short_names.fasta
 zcat Arab_me14.gff3.gz | sed 's/Arab_Me14_//' > Arab_me14_short_names.gff
 ```
 
-Variants in coding regions of genes were identified as Synonymous/Non-synonymous/Non-sense mutations if they were silent, changing the amino acid or the reading frame, respectively. Additional annotation of the genes at each SNP site was performed by a BLASTp search against the NCBI non-redundant protein database (nr) and scanning against the InterPro conglomerate dbs. Effector prediction of the variant-associated genes was performed by `r fontFmt("EffectorP")` v1.0/2.0 [@SperschneiderEffectorPpredictingfungal2016;@JanaImprovedpredictionfungal2018]. The variants were summarised and visualised across the genome scaffolds and visualised using `r fontFmt("circlize")` v`r packageVersion("circlize")` R package [@gu_circlize_2014].
+Variants in coding regions of genes were identified as Synonymous/Non-synonymous/Non-sense mutations if they were silent, changing the amino acid or the reading frame, respectively. Additional annotation of the genes at each SNP site was performed by a BLASTp search against the NCBI non-redundant protein database (nr) and scanning against the InterPro conglomerate dbs. 
 
 ```{bash interproscan}
 # Download the python wrapper
@@ -837,28 +1023,60 @@ Variants in coding regions of genes were identified as Synonymous/Non-synonymous
 $HPC_GRID_RUNNER_DIR/BioIfx/hpc_FASTA_GridRunner.pl --cmd_template "cd $PBS_O_WORKDIR; pyenv shell miniconda3-latest; ~/etc/tools/Annotation/InterPro/iprscan5_urllib3.py --sequence=__QUERY_FILE__ --outfile=__QUERY_FILE__.interpro.tsv --outformat=tsv --goterms --pathways --email=i.bar@griffith.edu.au " --query_fasta Assoc_SNP_genes_cds_05_02_2018.fasta -G $HPC_GRID_RUNNER_DIR/hpc_conf/small_PBS_jobs.conf -N 1 -O SNP_interpro
 ```
 
+Effector prediction of the variant-associated genes was performed by `r fontFmt("Predector")` v1.2.6 [@jones2021], following the installation and usage instructions in the [online Wiki documentation](https://github.com/ccdmb/predector/wiki#quick-install) (downloading the external dependencies and building a `conda` environment). 
+
+```{bash predector}
+# building a conda environment with the external dependencies
+ENVIRONMENT=conda
+
+curl -s "https://raw.githubusercontent.com/ccdmb/predector/1.2.6/install.sh" \
+| bash -s "${ENVIRONMENT}" \
+    -3 signalp-3.0.Linux.tar.Z \
+    -4 signalp-4.1g.Linux.tar.gz \
+    -5 signalp-5.0b.Linux.tar.gz \
+    -6 signalp-6.0g.fast.tar.gz \
+    -t targetp-2.0.Linux.tar.gz \
+    -d deeploc-1.0.All.tar.gz \
+    -m tmhmm-2.0c.Linux.tar.gz \
+    -p phobius101_linux.tar.gz
+
+CONDA_PATH=$(conda env list | gawk '$0~/predector/{print $2}')
+mkdir -p ~/scratch/sandbox/predector_ME14 
+cd !$
+
+conda activate nf
+# nextflow run -profile gowonda -c $HOME/.nextflow/GU.config -with-conda $CONDA_PATH -r patch-2 \
+#   IdoBar/predector --proteome Ascochyta_rabiei_ME14_cds-proteins.faa
+nextflow run -profile gowonda -c $HOME/.nextflow/GU.config -with-conda $CONDA_PATH -r 1.2.6 \
+  ccdm/predector --proteome Ascochyta_rabiei_ME14_cds-proteins.faa  
+```
+
 Look for particular effector genes and genes associated with plant-pathogen interactions and pathogenicity genes. Look in the literature and create a list of target genes.
 
+### Visualisation
+
+The variants were summarised and visualised across the genome scaffolds and visualised using `r fontFmt("circlize")` v`r packageVersion("circlize")` R package [@gu2014].
+
+
 ### Variant-Pathogenicity association
-Association between variants and pathogenicity levels was identified by `r fontFmt("SNPassoc")` v`r packageVersion("SNPassoc")` R package [@gonzalez_snpassoc:_2007], using a codominant gene model and a significance threshold of _p_-value $\le0.005$.  
 
-
+Association between variants and pathogenicity levels was identified with `r fontFmt("GAPIT")` v3.2 R package [@wang2021], using a XXXX model and a significance threshold of *p*-value $\le0.05$.
 
 ## Appendix 2. Useful resources
 
-* Whole-Genome Comparison of _Aspergillus fumigatus_ Strains Serially Isolated from Patients with Aspergillosis. [@hagiwara_whole-genome_2014]:
-
-> **Sequence analysis:** The Illumina data sets were trimmed using fastq-mcf in ea-utils (version 1.1.2-484), i.e., sequencing adapters and sequences with low quality scores (Phred score [Q], <30) were removed (24). The data sets were mapped to the genome sequence of the _A. fumigatus_ genome reference strain Af293 (29,420,142 bp, genome version s03-m04-r03) (25, 26) using Bowtie 2 (version 2.0.0-beta7) with the very sensitive option in end-to-end mode (27). Duplicated reads were removed using Picard (version 1.112) (<http://picard.sourceforge.net>). The programs mpileup and bcftools from SAMtools (version 0.1.19-44428cd) were used to perform further quality controls. In mpileup, the -q20 argument was used to trim reads with low-quality mapping, whereas the argument -q30 was used to trim low-quality bases at the 3' end (28). The bcftools setting was set to -c in order to call variants using Bayesian inference. Consensus and single nucleotide polymorphisms (SNPs) were excluded if they did not meet a minimum coverage of 5x or if the variant was present in <90% of the base calls (29, 30). The genotype field in the variant call format (VCF) files indicates homozygote and heterozygote probabilities as Phred-scaled likelihoods. SNPs were excluded if they were called as heterozygous genotypes using SAMtools. The mapping results were visualized in the Integrative Genomics Viewer (version 2.3.3) (31, 32). The reference genome data included information on open reading frames and annotations, from which the SNPs were designated non-synonymous or synonymous.  
-Single nucleotide mutations were confirmed by Sanger sequencing. Regions of approximately 400 bp that contained a mutation were amplified with appropriately designed primer pairs and then sequenced. The primer sequences are listed in Table S1 in the supplemental material, which were named as follows. For verification of the SNPs in strains from patient I or patient II, PaI or PaII was added to the primer name, respectively. For non-synonymous SNPs, synonymous SNPs, or SNPs in a non-coding region, (NS, Syno, NonC) was added to the primer name, respectively.  
-**Analysis of unmapped reads:** _De novo_ assembly of the unmapped reads was conducted using the Newbler assembler 2.9 (Roche), with default parameters. The contigs were selected based on size/depth criteria: those of <500 bp and/or with a depth of <30x coverage were removed. To investigate whether unique genome sequences were present in strains isolated from the same patient, the unmapped reads of each strain were mapped to the contigs generated from all the strains in the same patient by the Bowtie 2 software. The coverage of the mapped regions was then evaluated. Gene predictions were performed using the gene prediction tool AUGUSTUS (version 2.5.5), with a training set of  _A. fumigatus_ (33). The parameters of AUGUSTUS were -species = aspergillus_fumigatus, -strand = both, -genemodel = partial, -singlestrand = false, -protein = on, -introns = on, -start = on, -stop = on, -cds = on, and -gff3 = on. To compare all the predicted genes with _Aspergillus_ genes, consisting of 244,811 genes available on AspGD (34), a reciprocal BLAST best hit approach was performed by BLASTp (35), with an E value of 1.0e<sup>-4</sup>. All BLASTp results were filtered based on a BLASTp identity of $\ge 80$% and an aligned length coverage of $\ge 80$%.
+-   A population genomic characterization of copy number variation in the opportunistic fungal pathogen *Aspergillus fumigatus* [@zhao2018]
+-   Whole-Genome Comparison of *Aspergillus fumigatus* Strains Serially Isolated from Patients with Aspergillosis [@hagiwara2014]
 
 ## General information
+
 This document was last updated at `r Sys.time()` using R Markdown (built with `r R.version.string`). Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. It is especially powerful at authoring documents and reports which include code and can execute code and use the results in the output. For more details on using R Markdown see <http://rmarkdown.rstudio.com> and [Rmarkdown cheatsheet](https://www.rstudio.com/wp-content/uploads/2016/03/rmarkdown-cheatsheet-2.0.pdf).
 
-***
+------------------------------------------------------------------------
+
 ## Bibliography
 
 <!-- ```{r results='asis', eval=TRUE} -->
-<!-- PrintBibliography(biblio) -->
-<!-- ``` -->
 
+<!-- PrintBibliography(biblio) -->
+
+<!-- ``` -->
