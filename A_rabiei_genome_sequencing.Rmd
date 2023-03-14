@@ -1,7 +1,7 @@
 ---
 title: "Whole Genome Sequencing of *Ascochyta rabiei* Isolates (2020)"
 author: "Ido Bar"
-date: "11 July 2022"
+date: "30 July 2022"
 always_allow_html: yes
 output: 
     # md_document:
@@ -30,12 +30,15 @@ csl: style/springer-basic-improved-author-date-with-italic-et-al-period.csl
 devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "util.R")
 knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
 # options(width = 180)
-# CRAN settings
+# Sys.setenv(JAVA_HOME = "C:/Program Files/Java/jre1.8.0_341")
+
+# remotes::install_github(c("ropensci/tabulizerjars", "ropensci/tabulizer"), INSTALL_opts = "--no-multiarch")
+ # CRAN settings
 chooseCRANmirror(ind=1)
 options(repos = getOption("repos")["CRAN"]) # fix the annoying "unable to access index..."
-pacman::p_load(tidyverse, readxl, scales, paletteer, VariantAnnotation, cn.mops,
-               htmltools, ggrepel, here,  DT, plotly, mmod, poppr, circlize,
-               tabulizer)
+pacman::p_load(tidyverse, readxl, scales, janitor, paletteer, VariantAnnotation, cn.mops,
+               htmltools, ggrepel, here,  DT, plotly, mmod, poppr, circlize, downloadthis,
+               tabulizer, htmltab)
 pacman::p_load_gh('Mikata-Project/ggthemr')
 # Connect to Zotero to access references
 # biblio <- ReadBib("data/Fungal_genomes.bib") # , "bibtex", "RefManageR"
@@ -59,9 +62,34 @@ fontFmt = function(x,font="consolas"){
 #   setNames(stringr::str_to_title(sub("_.+$", "", names(.)))) %>% .[c(8:7,1:4)] %>% rename(Host=Genotype)
 # 
 # patho_table <- read_excel("../samples_db/output/A_rabiei_pathotypes_2013-2020.xlsx", sheet = "pathotyping")
-sequencing_table <- read_excel("./sample_info/AGRF_NGS_Plates.xlsx", sheet = "Sample Details") %>% 
-  mutate(Isolate=sub("_R$", "", `Sample Name`))
-samples_table <- readxl::read_excel(here("sample_info/Summary_tables_AR_2020.xlsx"), "samples_db")
+cloudstor_links_2018 <- hyperlinks_from_excel(here("sample_info/A_rabiei_isolate_list_for_wgs.xlsx"), 
+                                         ExcelSheet = "submission_info") %>% 
+                    select(target, CloudStor_Folder=text) %>% 
+                    distinct()
+
+sequencing_table_2018 <- read_excel(here("sample_info/A_rabiei_isolate_list_for_wgs.xlsx"), 
+                               sheet = "submission_info") %>% 
+  mutate(Submission_id=sub("_S\\d+$", "", Submission_id)) %>% 
+  left_join(cloudstor_links_2018)
+
+cloudstor_links_2020 <- hyperlinks_from_excel(here("sample_info/AGRF_NGS_yield.xlsx"), 
+                                         ExcelSheet = "AGRF_NGS_yield") %>% 
+                    select(target, CloudStor_Folder=text) %>% 
+                    distinct()
+
+sequencing_table_2020 <- read_excel(here("sample_info/AGRF_NGS_yield.xlsx"), 
+                               sheet = "AGRF_NGS_yield") %>% 
+  left_join(cloudstor_links_2020)
+sequencing_table <- sequencing_table_2020 %>% 
+  select(Submission_id=`Sample Name`, Isolate, CloudStor_Folder, target) %>% 
+  mutate(Sequencing_Centre="AGRF") %>% 
+  bind_rows(sequencing_table_2018 )
+  
+
+
+samples_table <- readxl::read_excel(here("sample_info/Summary_tables_AR_2020.xlsx"), "samples_db") %>% 
+  filter(Isolate %in% sequencing_table$Isolate)
+  
 # 
 # 
 # samples_table <- selected_samples %>% left_join(patho_table %>% select(Isolate, Year, Pathogenicity=Path_rating)) %>% 
@@ -86,15 +114,39 @@ samples_table <- readxl::read_excel(here("sample_info/Summary_tables_AR_2020.xls
 DNA was extracted from 197 isolates of *Ascochyta rabiei* (collected in 2020) and sent for Whole-Genome-Sequencing (WGS) at the Australian Genome Research Facility (AGRF, Melbourne) on 1 lane of a NovaSeq flowcell, producing 150 bp paired-end reads (run name CAGRF20114478).\
 Details of the sequenced isolates is provided in (Table \@ref(tab:samples-table)).
 
-```{r samples-table, eval=FALSE, results='asis', echo=FALSE, out.width="100%"}
+```{r samples-table, eval=TRUE, results='asis', echo=FALSE, out.width="100%"}
 # create table caption hook
 DT_caption("samples-table", HTML("<i>Ascochyta rabiei</i> samples used in this study."))
 
-datatable(samples_table, caption=tbls("samples"), rownames = FALSE) %>% # , 
+DT_samples_table <- samples_table %>% 
+  select(-any_of(c("Sample_Id", "Isolate_Code", "Supplied_by", "Delivered_to", "Collection_Date",
+                   "Isolate_Usq", "Comment", "Genotyped", "Path_rating2", "lat", "lon"))) %>% 
+  relocate(Isolate, .before = 1)
+DT_samples_table   %>% 
+datatable(rownames = FALSE, colnames = snakecase::to_title_case(colnames(DT_samples_table), abbreviations = c("ICC")),
+          extensions = "Buttons",
+          # server = FALSE,
+          options = list(paging = TRUE,
+                           scrollX=TRUE, 
+                           pageLength = 10,
+                           lengthMenu = c(10, 25, 50, 100, 150, 200, 250),
+                           searching = TRUE,
+                           ordering = TRUE,
+                           dom = 'lfrtipB',
+                           buttons = c('copy', 'csv', 'excel'))) %>% # , 
           # options = list(dom = 'tf', pageLength = 40)) %>%
   formatStyle('Path_rating',
   backgroundColor = styleInterval(0:4, c('limegreen','gold', 'orange', 'orangered', 'firebrick', 'darkred'))
 )# pander , justify="left"
+
+# download_this(DT_samples_table %>% clean_names(case="title", abbreviations = c("ICC")),
+#                 output_name = "Arab_2020_isolate_metadata",
+#               output_extension = ".csv",
+#               button_label = "Download table as csv file",
+#               button_type = "success",
+#               has_icon = TRUE,
+#               icon = "fa fa-save",
+#               self_contained = FALSE)
 ```
 
 # Aims
@@ -145,8 +197,7 @@ source ~/.bashrc
 conda config --add channels conda-forge
 conda config --append channels bioconda
 # install extra packages to the base environment
-conda install -n base libgcc gnutls libuuid readline cmake git tmux libgfortran parallel \
-  gawk pigz rename genozip autoconf sshpass 
+conda install -n base libgcc gnutls libuuid readline cmake git tmux libgfortran parallel mamba  gawk pigz rename genozip autoconf sshpass 
 # install snippy (need to fix internet connection to gowonda2 - use patched netcheck in ~/bin)
 # source ~/.proxy
 CONDA_NAME=snippy
@@ -398,20 +449,6 @@ Reads are mapped to the *A. rabiei* reference genome assembled and annotated by 
 To improve performance, temporary files were written to a local `lscratch` folder on the computing node.
 
 ```{bash prep_updated_genomes}
-REF_DIR=$HOME/data/reference_genomes/Ascochyta_reference_genomes/Updated_ME14_reference_and_annotations # on Griffith HPC
-# REF_DIR=$HOME/data/reference_genomes # on Awoonga HPC
-GENOME="$REF_DIR/ArME14"
-ln -s $REF_DIR/Ascochyta_rabiei_ArME14.scaffolds.fa $GENOME.fa 
-ln -s $REF_DIR/ArME14_all_annotations.updated.gff3 $GENOME.gff3 
-gff2bed < $GENOME.gff3 > $GENOME.bed
-bwa-mem2 index $GENOME.fa 
-samtools faidx $GENOME.fa
-
-```
-
-Prepare and run the pipeline to trim the reads
-
-```{bash trim_reads_combined}
 WORK_DIR=$HOME/scratch/A_rabiei_WGS_2021
 CONDA_NAME=/export/home/s2978925/miniconda3/envs/snippy
 conda activate $CONDA_NAME
@@ -423,6 +460,25 @@ RUN="${BATCH}_${DATE}" # day of run was 30_09_2021
 RUN_DIR=$WORK_DIR/${RUN}
 mkdir -p $RUN_DIR
 cd $RUN_DIR
+# REF_DIR=$HOME/data/reference_genomes/Ascochyta_reference_genomes/Updated_ME14_reference_and_annotations # on Griffith HPC
+REF_DIR=$HOME/data/reference_genomes/Ascochyta_reference_genomes/ArME14_v2_NCBI # New published genome from NCBI on Griffith HPC
+# REF_DIR=$HOME/data/reference_genomes # on Awoonga HPC
+# GENOME="$REF_DIR/ArME14"
+GENOME="$RUN_DIR/ArME14_v2_NCBI"
+# ln -s $REF_DIR/Ascochyta_rabiei_ArME14.scaffolds.fa $GENOME.fa 
+# ln -s $REF_DIR/ArME14_all_annotations.updated.gff3 $GENOME.gff3 
+pigz -cd  $REF_DIR/ArME14.fasta.gz > $GENOME.fa
+pigz -cd  $REF_DIR/ArME14-genes.gff3.gz > $GENOME.gff3
+gff2bed < $GENOME.gff3 > $GENOME.bed
+bwa-mem2 index $GENOME.fa 
+samtools faidx $GENOME.fa
+
+```
+
+Prepare and run the pipeline to trim the reads
+
+```{bash trim_reads_combined}
+
 # GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
 # READ_LENGTH=150
 # PLOIDY=1
@@ -445,7 +501,7 @@ echo '#!/bin/bash
 cd $WORKDIR
 >&2 echo Current working directory: $PWD
 source ~/.bashrc'"
-conda activate $CONDA_PREFIX 
+conda activate $CONDA_NAME 
 set -Eeo pipefail
 gawk -v ARRAY_IND=\$PBS_ARRAY_INDEX 'NR==ARRAY_IND' \$CMDS_FILE | bash" > ${WORK_DIR}/array.pbspro
 
@@ -486,52 +542,58 @@ mkdir -p $RUN_DIR/pbs_logs
 cd !$
 
 # run fastp trim
-FASTP_TRIM=$(qsub -J1-$(cat $RUN_DIR/fastp_trim.cmds | wc -l) -l select=1:ncpus=8:mem=4GB,walltime=3:00:00 -N fastp_trim -v "CMDS_FILE=$RUN_DIR/fastp_trim.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+FASTP_TRIM=$(qsub -J1-$(cat $RUN_DIR/fastp_trim.cmds | wc -l) -l select=1:ncpus=12:mem=8GB,walltime=10:00:00 -N fastp_trim -v "CMDS_FILE=$RUN_DIR/fastp_trim.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
 
 # combine stderr files to log
 cat *.e$FASTP_TRIM.* > fastp_trim.$FASTP_TRIM.log
 
 # save failed commands to file
-grep "job killed"  fastp_trim.e$FASTP_TRIM.* | awk -F [.:] '{print $3}' | awk 'NR==FNR{pos[$1]; next}FNR in pos' - $RUN_DIR/fastp_trim.cmds > $RUN_DIR/fastp_trim.cmds.$FASTP_TRIM.failed
+egrep "job killed|limit exceeded"  fastp_trim.e$FASTP_TRIM.* | awk -F [.:] '{print $3}' | awk 'NR==FNR{pos[$1]; next}FNR in pos' - $RUN_DIR/fastp_trim.cmds > $RUN_DIR/fastp_trim.cmds.$FASTP_TRIM.failed
 # rerun failed jobs
+echo "cd $RUN_DIR ; source ~/.bashrc; conda activate $CONDA_NAME; parallel $RUN_DIR/fastp_trim.cmds.$FASTP_TRIM.failed " | qsub -l select=1:ncpus=8:mem=16GB,walltime=12:00:00 -N repeat_fastp
 
 # align the trimmed reads to the genome
 cd $RUN_DIR
 ls -1 *_R1.fastq.gz  | egrep -v $IGNORE_RE | sort | parallel -k --dry-run --rpl "{file2} s:_R1:_R2:; uq()" --rpl "{files} s:_R1:_R?:; uq()" --rpl "{sample} s:_R1.+::"  "cd  {sample}; bwa-mem2 mem -R \"@RG\tID:{sample}\tSM:{sample}\" -t \$[NCPUS - 2] $GENOME.fa {sample}_R1.trimmed.fastq.gz {sample}_R2.trimmed.fastq.gz | bamsormadup inputformat=sam threads=\$[NCPUS - 2] > {sample}.dedup.rg.csorted.bam" > $RUN_DIR/align_reads.cmds 
 
 # test run
-TEST_BWA=$(qsub -J1-2 -l select=1:ncpus=8:mem=8GB,walltime=2:00:00 -N align_reads -v "CMDS_FILE=$RUN_DIR/align_reads.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+# TEST_BWA=$(qsub -J1-2 -l select=1:ncpus=8:mem=8GB,walltime=2:00:00 -N align_reads -v "CMDS_FILE=$RUN_DIR/align_reads.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
 
 # run for all files
-ALIGN_BWA=$(qsub -J3-$(cat $RUN_DIR/align_reads.cmds | wc -l) -l select=1:ncpus=8:mem=8GB,walltime=2:00:00 -N align_reads -v "CMDS_FILE=$RUN_DIR/align_reads.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+ALIGN_BWA=$(qsub -J1-$(cat $RUN_DIR/align_reads.cmds | wc -l) -l select=1:ncpus=8:mem=12GB,walltime=4:00:00 -N align_reads -v "CMDS_FILE=$RUN_DIR/align_reads.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
 
 STEP_SIZE=5 # the processing is very quick (<20 minutes) and it would be more efficient for each job to process 5 commands at a time
 
 IGNORE_SAMS=$(awk '{printf "^%s\t|",$1}' $RUN_DIR/ignore_samples.txt | sed 's/|$//')
+
 # merge sam files of duplicated samples and rename to isolate name
-gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $WORK_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | tail -n+2 | sort -k2 | gawk  -F "\t" -v ORS="" 'BEGIN{cmd="picard MergeSamFiles USE_THREADING=true QUIET=true COMPRESSION_LEVEL=0 O=/dev/stdout"}NR==1{printf "%s I=%s/%s.dedup.rg.csorted.bam", cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate!=$2{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s LB=%s PL=Illumina PU=%s SM=%s O=%s.csorted.bam\n%s I=%s/%s.dedup.rg.csorted.bam", isolate, isolate, a[2], isolate,  isolate, cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate==$2{printf " I=%s/%s.dedup.rg.csorted.bam", $1, $1}END{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s LB=%s PL=Illumina PU=%s SM=%s O=%s.csorted.bam\n", isolate, isolate, a[2], isolate,  isolate}'  > $RUN_DIR/merge_bams.cmds
+# gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $WORK_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | tail -n+2 | sort -k2 | gawk  -F "\t" -v ORS="" 'BEGIN{cmd="picard MergeSamFiles USE_THREADING=true QUIET=true COMPRESSION_LEVEL=0 O=/dev/stdout"}NR==1{printf "%s I=%s/%s.dedup.rg.csorted.bam", cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate!=$2{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s LB=%s PL=Illumina PU=%s SM=%s O=%s.csorted.bam\n%s I=%s/%s.dedup.rg.csorted.bam", isolate, isolate, a[2], isolate,  isolate, cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate==$2{printf " I=%s/%s.dedup.rg.csorted.bam", $1, $1}END{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s LB=%s PL=Illumina PU=%s SM=%s O=%s.csorted.bam\n", isolate, isolate, a[2], isolate,  isolate}'  > $RUN_DIR/merge_bams.cmds
 
-
-# test run (if not fast enough replace with sambamba merge and samtools addreplacerg )
-TEST_MERGE=$(qsub -J1-2 -l select=1:ncpus=8:mem=16GB,walltime=2:00:00 -N merge_bams -v "CMDS_FILE=$RUN_DIR/merge_bams.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+# merge and rename ONLY duplicated samples
+gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $WORK_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | tail -n+2 | sort -k2 | gawk  -F "\t" -v ORS="" 'BEGIN{cmd="picard MergeSamFiles USE_THREADING=true QUIET=true COMPRESSION_LEVEL=0 O=/dev/stdout"}NR==1{printf "%s I=%s/%s.dedup.rg.csorted.bam", cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate!=$2{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s_merged LB=%s_merged PL=Illumina PU=mixed SM=%s O=%s_merged.csorted.bam\n%s I=%s/%s.dedup.rg.csorted.bam", isolate, isolate, isolate,  isolate, cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate==$2{printf " I=%s/%s.dedup.rg.csorted.bam", $1, $1}END{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s_merged LB=%s_merged PL=Illumina PU=mixed SM=%s O=%s_merged.csorted.bam\n", isolate, isolate,  isolate,  isolate}' | gawk 'NF>19' > $RUN_DIR/merge_rename_bams.cmds
 
 # run for all files
-MERGE_BAMS=$(qsub -J3-$(cat $RUN_DIR/merge_bams.cmds | wc -l) -l select=1:ncpus=8:mem=16GB,walltime=1:30:00 -N merge_bams -v "CMDS_FILE=$RUN_DIR/merge_bams.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+MERGE_BAMS=$(qsub -J1-$(cat $RUN_DIR/merge_rename_bams.cmds | wc -l) -l select=1:ncpus=8:mem=16GB,walltime=1:30:00 -N merge_bams -v "CMDS_FILE=$RUN_DIR/merge_rename_bams.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+
+# rename all individual bams
+gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $WORK_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | tail -n+2 | sort -k2 | gawk  -F "\t" '{isolate=$2; split($6, a , " ");printf "picard AddOrReplaceReadGroups USE_THREADING=true QUIET=true SO=coordinate I=%s/%s.dedup.rg.csorted.bam CREATE_INDEX=true ID=%s_%s LB=%s_%s PL=Illumina PU=%s SM=%s CN=%s O=%s_%s.csorted.bam\n", $1, $1, isolate, $4, isolate, $4, a[2], isolate, $4, isolate, $4}' > $RUN_DIR/rename_bams.cmds
+
+RENAME_BAMS=$(qsub -J1-$(cat $RUN_DIR/rename_bams.cmds | wc -l) -l select=1:ncpus=8:mem=16GB,walltime=1:30:00 -N rename_bams -v "CMDS_FILE=$RUN_DIR/rename_bams.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
 
 # find failed runs and repeat
 cd $RUN_DIR
-find . -maxdepth 1 -name "*.csorted.bam" -size 1M | cut -f 2 -d "/" | grep -f - merge_bams.cmds > merge_bams.cmds.failed
-# repeat run
-echo "cd $RUN_DIR ; source ~/.bashrc; conda activate $CONDA_NAME; cat merge_bams.cmds.failed | parallel" | qsub -l select=1:ncpus=8:mem=16GB,walltime=2:00:00 -N merge_bams  
+find . -maxdepth 1 -name "*.csorted.bam" -size 1M | cut -f 2 -d "/" | grep -f - rename_bams.cmds > rename_bams.cmds.failed
+# repeat failed runs
+echo "cd $RUN_DIR ; source ~/.bashrc; conda activate $CONDA_NAME; parallel rename_bams.cmds.failed" | qsub -l select=1:ncpus=8:mem=16GB,walltime=2:00:00 -N repeat_merge
 
 # index BAMs (if not done previously while adding Read Groups)
-BAM_INDEX=$( echo "cd $RUN_DIR ; source ~/.bashrc; conda activate $CONDA_NAME; ls -1 *.csorted.bam | parallel 'sambamba index -t4 {} '" | qsub -V -l select=1:ncpus=16:mem=16GB,walltime=2:00:00 -N index_bams | egrep -o "^[0-9]+")
+# BAM_INDEX=$( echo "cd $RUN_DIR ; source ~/.bashrc; conda activate $CONDA_NAME; ls -1 *.csorted.bam | parallel 'sambamba index -t4 {} '" | qsub -V -l select=1:ncpus=16:mem=16GB,walltime=2:00:00 -N index_bams | egrep -o "^[0-9]+")
 
 # Run qualimap on bam files (files need to be sorted)
 # QUALIMAP_JOB="qualimap_${RUN}"
 # Qualimap bamqc
 cd $RUN_DIR
-ls -1 *_R1.fastq.gz  | egrep -v $IGNORE_RE | sort | parallel -k --dry-run --rpl "{file2} s:_R1:_R2:; uq()" --rpl "{files} s:_R1:_R?:; uq()" --rpl "{sample} s:_R1.+::"  "unset DISPLAY; cd  $RUN_DIR/{sample}; qualimap bamqc -bam {sample}.dedup.rg.csorted.bam --java-mem-size=4G -c -gff $GENOME.bed -outdir $RUN_DIR/{sample}/{sample}_bamqc" > qualimap_bamqc.cmds
+ls -1 *_R1.fastq.gz  | egrep -v $IGNORE_RE | sort | parallel -k --dry-run --rpl "{file2} s:_R1:_R2:; uq()" --rpl "{files} s:_R1:_R?:; uq()" --rpl "{sample} s:_R1.+::"  "unset DISPLAY; cd  $RUN_DIR/{sample}; qualimap bamqc -bam {sample}.dedup.rg.csorted.bam --java-mem-size=4G -c -gff $GENOME.bed -outdir $RUN_DIR/{sample}/{sample}_bamqc" > $RUN_DIR/qualimap_bamqc.cmds
 cd $RUN_DIR/pbs_logs
 # submit to the cluster
 STEP_SIZE=5 # the processing is very quick (<20 minutes) and it would be more efficient for each job to process 5 commands at a time
@@ -570,21 +632,21 @@ rm raw.sam raw_R*.fq.gz
 
 #### Mapping QC
 
-Error rates were estimated by individually processing the duplicate samples and assessing the rate of mismatch variant calls within replicates of the same isolate.   
+Error rates were estimated by individually processing the duplicate samples and assessing the rate of mismatch variant calls within replicates of the same isolate.\
 *To process mapping table, copy the `multisampleBamQcReport.html` file from the server to the local analysis folder*
 
-```{r snippy_stats, eval=FALSE, echo=FALSE, include=FALSE}
-analysis_basename <- "A_rabiei_2018"
-analysis_name <- "Snippy_multi_17_07_2019"
-analysis_folder <- file.path("..", analysis_name)
-variant_method <- "snippy"
-# analysis_folder <- "../FB_vars_01_03_2019"
-# analysis_outdir <- glue("./output/{variant_method}/")
-error_rates <- readxl::read_excel("output/results/pipeline_comparison.xlsx", 
-                                  sheet = "Snippy_multi_07_07_2019") %>% 
-  select(-vcf_file)
-mean_allele_error <- mean(error_rates$allele_error_rate)
-stats_table <- read_tsv(file.path(analysis_folder,"core.txt")) 
+```{r snippy_stats, eval=TRUE, echo=FALSE, include=FALSE}
+# analysis_basename <- "A_rabiei_2018"
+# analysis_name <- "Snippy_multi_17_07_2019"
+# analysis_folder <- file.path("..", analysis_name)
+# variant_method <- "snippy"
+# # analysis_folder <- "../FB_vars_01_03_2019"
+# # analysis_outdir <- glue("./output/{variant_method}/")
+# error_rates <- readxl::read_excel("output/results/pipeline_comparison.xlsx",
+#                                   sheet = "Snippy_multi_07_07_2019") %>%
+#   select(-vcf_file)
+# mean_allele_error <- mean(error_rates$allele_error_rate)
+# stats_table <- read_tsv(file.path(analysis_folder,"core.txt"))
 
 
 # mapping_table <- list.files(analysis_folder, ".bbmap.stats", full.names = TRUE) %>% map_df(read_tsv) %>% 
@@ -599,50 +661,84 @@ stats_table <- read_tsv(file.path(analysis_folder,"core.txt"))
 
 # Load qualimap statistics (copy summary html files to raw_data folder)
 
-qualimap_files <- list.files(analysis_folder, "multisampleBamQcReport.html", 
+qualimap_files <- list.files(here("raw_data"), "multisampleBamQcReport.html", 
                              full.names = TRUE, 
                              recursive = TRUE)
 exclude_columns <- c("Coverage std", "Insert size median")
   # mutate(`Pathog. Group`=samples_table$Pathogenicity[match(samples_table$Isolate, .$Isolate)] ) 
-qualimap_results <-  qualimap_files[1] %>% map_df(~htmltab(., which = "//td/b[text() = 'Sample name']/ancestor::table")) %>% 
-  rename(Isolate=`Sample name`, Coverage=`Coverage mean`) %>% 
+qualimap_results <-  qualimap_files %>% .[grepl("/All", .)] %>% 
+  map_df(~htmltab(., which = "//td/b[text() = 'Sample name']/ancestor::table")) %>% 
+  rename(Submission_id=`Sample name`, Coverage=`Coverage mean`) %>% 
   dplyr::select(-one_of(exclude_columns)) %>% 
-  mutate_at(.vars = vars(-starts_with("Isolate")), .funs = as.numeric) %>%
-  left_join(., error_rates %>% select(Isolate=replicate_group, Error_rate=allele_error_rate,
-                                       Replicates=replicate_num)) %>%
-  arrange(Isolate, desc(Coverage)) %>% set_names(., gsub(" ", "_", colnames(.))) %>%
+  mutate(across(-starts_with("Submission_id"), as.numeric)) %>%
+  right_join(sequencing_table, .) %>% 
+  relocate(Comments, .after = last_col()) %>% 
+  relocate(Isolate, .before = 1) %>% 
+  # left_join(., error_rates %>% select(Isolate=replicate_group, Error_rate=allele_error_rate,
+  #                                      Replicates=replicate_num)) %>%
+  mutate(cloudstor_folder= glue::glue('<a href="{target}" target="_blank">{CloudStor_Folder}</a>')) %>% 
+  select(-any_of(c("target", "CloudStor_Folder")))  %>% 
+  arrange(Isolate, desc(Coverage)) %>% clean_names(case="snake", abbreviations=c("ID", "GC")) %>% 
+  relocate(cloudstor_folder, .after = "sequencing_centre")
+  #set_names(., gsub(" ", "_", colnames(.))) %>%
   # dplyr::select(Isolate, GC_percentage, Mapping_quality_mean, Mapping_rate, Coverage, Mapping_tool, Sample_id, Sequencing_Centre) %>%
-  write_csv(filedate(glue::glue("{analysis_basename}_{analysis_name}.mapping.stats"), ".txt", "./output/results", dateformat = FALSE))
+ # write_csv(filedate(glue::glue("{analysis_basename}_{analysis_name}.mapping.stats"), ".txt", "./output/results", dateformat = FALSE))
 
 # Summarise mapping results
-# mapping_summary <- qualimap_results %>% filter(Coverage>20) %>% 
-#   group_by(Sequencing_Centre) %>% 
-#   summarise(Coverage=sprintf("x%.2f",mean(Coverage)), 
+# mapping_summary <- qualimap_results %>% filter(Coverage>20) %>%
+#   group_by(Sequencing_Centre) %>%
+#   summarise(Coverage=sprintf("x%.2f",mean(Coverage)),
 #             Mapping_rate=sprintf("%.2f%%", mean(Mapping_rate, na.rm=TRUE)*100),
 #                                      Mapping_qual=round(mean(Mapping_quality_mean), 2),
 #             Files=n()) %>%
-#   # mutate(Reads_per_file=format(c(2224642.64, 36500108.00), 
+#   # mutate(Reads_per_file=format(c(2224642.64, 36500108.00),
 #   #                              digits = 2, scientific = TRUE)) %>%
-#   arrange(desc(Sequencing_Centre)) %>% 
+#   arrange(desc(Sequencing_Centre)) %>%
 #   write_csv(filedate(glue::glue("{analysis_basename}_AGRF_Macro_AgVic.mapping.sum"), ".txt", "./output/results", dateformat = FALSE))
 
 ```
 
 Samples with less than 20% mapping and x15 coverage were removed from the rest of the analysis (see highlighted rows in Table \@ref(tab:mapping-table) and more details in the [MultiQC report](raw_data/QC_11_10_2021_multiqc_report.html)).
 
-```{r map_stats, eval=FALSE, results='asis', echo=FALSE, out.width="100%"}
+```{r map_stats, eval=TRUE, results='asis', echo=FALSE, out.width="100%"}
 # insert table caption hook
 DT_caption("mapping-table", HTML("Mapping rates of the WGS reads to the <i>Ascochyta rabiei</i> Me14 reference genome."))
 # prepare and present  table
-datatable(as.data.frame(qualimap_results), # %>% mutate_if(is.numeric, ~round(., 2))),
-          caption=tbls("mapping_rates")) %>% #, 
-  formatRound(~Coverage+GC_percentage+Mapping_quality_mean) %>% 
-  formatPercentage('Error_rate', 2) %>% 
+qualimap_results %>% 
+  mutate(across(where(is.numeric), ~round(.x, digits = 1)),
+                gc_percentage=gc_percentage/100) %>% 
+datatable(rownames = FALSE, colnames = snakecase::to_title_case(colnames(qualimap_results), abbreviations=c("ID", "GC")),
+          extensions = "Buttons",
+          # server = FALSE,
+          options = list(paging = TRUE,
+                           scrollX=TRUE, 
+                           pageLength = 10,
+                           lengthMenu = c(10, 25, 50, 100, 150, 200, 250),
+                           searching = TRUE,
+                           ordering = TRUE,
+                           dom = 'lfrtipB',
+                           buttons = c('copy', 'csv', 'excel')),
+          escape = FALSE) %>% #, 
+#  formatRound(~coverage+mapping_quality_mean, 1) %>% 
+  formatPercentage("gc_percentage", 1) %>%
+  formatString("coverage", suffix = "x") %>% 
           # options = list(dom = 'tf', pageLength = 40)) %>%
-  formatStyle("Coverage", target = "row",
+  formatStyle("coverage", target = "row",
   backgroundColor = styleInterval(c(10,20), c('#ef3125', '#feed95', NA))
 )
 
+
+# qualimap_results %>% 
+#               mutate(across(where(is.numeric), ~round(.x, digits = 1)),
+#                 gc_percentage=gc_percentage/100) %>% clean_names(case="title", 
+#                                                                  abbreviations = c("ID", "GC")) %>% download_this(. ,
+#                 output_name = "Arab_2020_isolate_alignment_data",
+#               output_extension = ".csv",
+#               button_label = "Download table as csv file",
+#               button_type = "success",
+#               has_icon = TRUE,
+#               icon = "fa fa-save",
+#               self_contained = FALSE)
 # pander(as.data.frame(qualimap_results), caption=tbls("mapping_rates"), justify="left")
 
 # datatable(as.data.frame(mapping_stats), caption = tbls("mapping_rates"), # , width=10
@@ -653,7 +749,6 @@ datatable(as.data.frame(qualimap_results), # %>% mutate_if(is.numeric, ~round(.,
 #     backgroundColor = styleInterval(c(0.05, 0.5), c('red', 'yellow',NA))
 #   )
 ```
-
 
 ```{r QC-GC, eval=FALSE, echo=FALSE, out.width='100%', fig.cap="GC (%) content in trimmed WGS reads."}
 include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
@@ -759,11 +854,11 @@ source ~/.proxy
 cd ~/.nextflow/assets/IdoBar
 git clone https://github.com/IdoBar/hecaton.git
 
-WORK_DIR=$HOME/scratch/A_rabiei_WGS_2021
-GENOME_DIR="$HOME/data/reference_genomes/Ascochyta_reference_genomes/ArME14_v2"
-GENOME="ArME14.v2.fasta"
+WORK_DIR=$PWD
+GENOME_DIR="$HOME/data/reference_genomes/Ascochyta_reference_genomes/Updated_ME14_reference_and_annotations"
+GENOME="Ascochyta_rabiei_ArME14.scaffolds.fa"
 HECATON_HOME="$HOME/.nextflow/assets/IdoBar/hecaton"
-FQ_DIR="$WORK_DIR/All_2018_2020_30_09_2021"
+FQ_DIR="$HOME/scratch/A_rabiei_WGS_2021/All_2018_2020_30_09_2021"
 
 DATE=`date +%d_%m_%Y`
 RUN=Hecaton_all_${DATE} # day of run was 05_07_2021
@@ -782,11 +877,11 @@ mkdir fastq_dir
 printf "AR0106\nAR0107\nAR0113\nAR0118\n11\n5B\n2\n15CUR005\nAGRF_18\nAGRF_08\nF15023\n20" > ignore_samples.txt
 IGNORE_RE=$(awk '{printf "/%s_R|",$1}' ignore_samples.txt | sed 's/|$//')
 # perform adapter trimming (fastp) 
-ls -1 $FQ_DIR/*.fastq.gz  | egrep -v $IGNORE_RE | sort | parallel -k --dry-run ln -s {} fastq_dir/
+ls -1 $FQ_DIR/AR0*.fastq.gz  | egrep -v $IGNORE_RE | sort | parallel -k ln -s {} fastq_dir/
 
 # run Hecaton
 conda activate nf
-nextflow run -with-singularity ~/.singularity/cache/hecaton_latest.sif -c ~/.nextflow/GU.config -profile gowonda -w hecaton_workdir $HOME/.nextflow/assets/IdoBar/hecaton/nextflow/hecaton.nf --genome_file $GENOME --reads "fastq_dir/*_R{1,2}.fastq.gz" --manta_config $HECATON_HOME/docker/configManta_weight_1.py.ini --output_dir hecaton_output --model_file $HECATON_HOME/models/random_forest_model_concat_A_thaliana_ColxCvi_O_sativa_Suijing18_coverage_10x_insertions_balanced_subsample.pkl -resume
+nextflow run -with-singularity  ~/aDNA/tools/.singularity/cache/hecaton_latest.sif -c ~/.nextflow/GU.config -profile gowonda -w hecaton_workdir $HOME/.nextflow/assets/IdoBar/hecaton/nextflow/hecaton.nf --genome_file $GENOME --reads "fastq_dir/*_R{1,2}.fastq.gz" --manta_config $HECATON_HOME/docker/configManta_weight_1.py.ini --output_dir hecaton_output --model_file $HECATON_HOME/models/random_forest_model_concat_A_thaliana_ColxCvi_O_sativa_Suijing18_coverage_10x_insertions_balanced_subsample.pkl -resume
 
 # add read depth and convert to vcf
 # prepare input file 
@@ -798,15 +893,30 @@ find `pwd`/hecaton_output/random_forest_calls -name "*unfiltered.bedpe" | sort |
 # awk 'NR==FNR{a[$1]=$3; next} ($7 in a) {print $0, a[$7]}' TableB TableA > TableC
 join -1 1 -t $'\t' -o 1.1,1.2,2.2 <(sort bam_inputs.tsv -k1) <(sort unfiltered.bedpe.files -k1) > bed2vcf_input_files.tsv
 
-# run the pipeline and combine VCFs
+# run the pipeline and convert BEDPE files to VCFs
 nextflow run -with-singularity ~/.singularity/cache/hecaton_latest.sif -c ~/.nextflow/GU.config -profile gowonda $HOME/.nextflow/assets/IdoBar/hecaton/nextflow/add_read_depth.nf --input bed2vcf_input_files.tsv --fasta $GENOME --outdir duphold_unfiltered_output --merge -resume
+
+# Combine/merge the VCF files
+# "fix" merge vcf script
+ln -s $HOME/conda3/envs/hecaton/lib/libcrypto.so.1.1 $HOME/conda3/envs/hecaton/lib/libcrypto.so.1.0.0
+ln -s $HOME/.nextflow/assets/IdoBar/hecaton/scripts/utils $HOME/.nextflow/assets/IdoBar/hecaton/scripts/genotype/
+# create the input file
+ls -1 *.vcf.gz > hecaton_vcf_files.txt
+
+# send the job to the cluster
+HEC_MERGE_JOB=$( echo "source ~/.bashrc; conda activate hecaton; cd $PWD; set -Eeo pipefail; $HOME/.nextflow/assets/IdoBar/hecaton/scripts/genotype/merge_vcf_files.py -i hecaton_vcf_files.txt -f $HOME/scratch/A_rabiei_WGS_2021/Hecaton_all_05_07_2022/$GENOME.fai -o A_rabiei_merged_samples.vcf -r 0.5 " | qsub -V -l select=1:ncpus=8:mem=4GB,walltime=1:00:00 -N cn_MOPS | egrep -o "^[0-9]+")
+
+# run for the 2020 samples only
+ls -1 AR0*.vcf.gz > AR_2020_vcfs.txt
+# send the job to the cluster
+HEC_MERGE_JOB=$( echo "source ~/.bashrc; conda activate hecaton; cd $PWD; set -Eeo pipefail; $HOME/.nextflow/assets/IdoBar/hecaton/scripts/genotype/merge_vcf_files.py -i AR_2020_vcfs.txt -f $HOME/scratch/A_rabiei_WGS_2021/Hecaton_all_05_07_2022/$GENOME.fai -o A_rabiei_2020_merged_samples.vcf -r 0.5 " | qsub -V -l select=1:ncpus=8:mem=4GB,walltime=1:00:00 -N cn_MOPS | egrep -o "^[0-9]+")
 
 ```
 
 #### cn.MOPS
 
 `r fontFmt("cn.MOPS")` (v`r packageVersion("cn.mops")`) is a Bioconductor R package that models the depth of coverage distribution across samples in each genomic loci and applies a Bayesian approach to infer integer copy number for each location [@klambauer2012].\
-    See the `cn.mops.R` [Gist](https://gist.github.com/IdoBar/0d39c714469219abf7932d2c1666ed25) for an example of the workflow.
+See the `cn.mops.R` [Gist](https://gist.github.com/IdoBar/0d39c714469219abf7932d2c1666ed25) for an example of the workflow.
 
 ```{bash cn-mops}
 # setup R environment on the cluster
@@ -913,6 +1023,169 @@ NCORES=8
 
 ```
 
+#### CNVpytor
+
+`r fontFmt("CNVpytor")` (v2.7.2) is a Python pipeline to call CNVs from WGS data. [@suvakov2021]
+
+```{bash cnvpytor}
+CONDA_NAME=cnv
+mamba create -n $CONDA_NAME cnvpytor jupyterlab samtools
+WORK_DIR=$HOME/aDNA/jemma_cnv
+DATE=`date +%d_%m_%Y`
+RUN=cnvpytor_all_${DATE} # day of run was 02_02_2019
+mkdir -p $WORK_DIR/${RUN}
+
+REF_DIR=$HOME/data/reference_genomes/Ascochyta_reference_genomes/Updated_ME14_reference_and_annotations # on Griffith HPC
+# REF_DIR=$HOME/data/reference_genomes # on Awoonga HPC
+GENOME="Ascochyta_rabiei_ArME14.scaffolds.fa"
+
+# JOB_NAME="BBmap_me14_vars"
+BAM_DIR="$WORK_DIR/aligned_reads_ido"
+mkdir -p $BAM_DIR
+ln -s $HOME/scratch/A_rabiei_WGS_2021/All_2018_2020_30_09_2021/*.csorted.bam* $BAM_DIR/ # ido only!
+rename -v 's/.csorted//' $BAM_DIR/* # remove the .csorted
+NCORES=8
+RUN_DIR=$PWD
+# prepare the reference genome
+cd $WORK_DIR
+cp $REF_DIR/$GENOME $WORK_DIR/
+conda activate $CONDA_NAME
+bgzip -c $WORK_DIR/$GENOME > $WORK_DIR/$GENOME.bg.gz
+samtools faidx $WORK_DIR/$GENOME.bg.gz
+# make a custom reference genome
+cnvpytor -root ArME14_gc.pytor -gc $WORK_DIR/${GENOME}.bg.gz -make_gc_file
+
+cut -f1-2 $WORK_DIR/$GENOME.bg.gz.fai |  gawk 'BEGIN{printf "#!/usr/bin/env python\n\nimport_reference_genomes = {\n\t\"me14\": {\n\t\t\"name\": \"ArME14v1.5\",\n\t\t\"species\": \"Ascochyta rabiei\",\n\t\t\"chromosomes\": OrderedDict(\n\t\t\t["}{printf "(\"%s\", (%s, \"S\")), ", $1, $2 }END{printf"]),\n\t\t\"gc_file\":\"ArME14_gc.pytor\"\n\t}\n}"}' | sed 's/), ]/)]/'> ArME14_ref_genome_conf.py
+
+# process one sample only
+cd $WORK_DIR/${RUN}
+alias cnvpytor_ref='cnvpytor -conf $WORK_DIR/ArME14_ref_genome_conf.py'
+cnvpytor_ref -root test.pytor -rd $BAM_DIR/AR0003.bam 
+cnvpytor_ref -root test.pytor -his 1000 10000 100000
+cnvpytor_ref -root test.pytor -partition 1000 10000 100000
+cnvpytor_ref -root test.pytor -call 1000 10000 100000 > calls.10000.tsv
+# Add SNP data
+# cnvpytor_ref -root test.pytor -snp $WORK_DIR/A_rabiei_2018_2020.bwa.fb.stringent.vcf.gz -sample AR0003
+
+# 
+
+
+ls -1 $BAM_DIR/*.bam | egrep -v "discordants|splitters" | parallel --dry-run "cnvpytor -conf $WORK_DIR/ArME14_ref_genome_conf.py -root {/.}.pytor -rd {} ; cnvpytor -conf $WORK_DIR/ArME14_ref_genome_conf.py -root {/.}.pytor -his 1000 10000 100000 ; cnvpytor -conf $WORK_DIR/ArME14_ref_genome_conf.py -root {/.}.pytor -partition 1000 10000 100000 ; cnvpytor -conf $WORK_DIR/ArME14_ref_genome_conf.py -root {/.}.pytor -call 1000 10000 100000 > {/.}_calls.tsv" > cnvpytor.cmds
+
+echo '#!/bin/bash 
+#PBS -V
+
+cd $WORKDIR
+>&2 echo Current working directory: $PWD
+source ~/.bashrc'"
+conda activate $CONDA_NAME 
+set -Eeo pipefail
+gawk -v ARRAY_IND=\$PBS_ARRAY_INDEX 'NR==ARRAY_IND' \$CMDS_FILE | bash" > array.pbspro
+
+CNVpytor=$(qsub -J1-$(cat cnvpytor.cmds | wc -l) -l select=1:ncpus=6:mem=8GB,walltime=5:00:00 -N cnvpytor -v "CMDS_FILE=$PWD/cnvpytor.cmds","WORKDIR=$PWD" ${PWD}/array.pbspro | egrep -o "^[0-9]+")
+```
+
+Find failed jobs and rerun. 
+```{bash cnvpytor-rerun}
+
+# find failed jobs and retry
+seq 1 $(cat cnvpytor.cmds | wc -l) | parallel  "printf {} ; qstat -fx $CNVpytor[{}] | grep "Exit_status"" | grep "Exit_status = 1" > failed.cmds
+# rerun failed jobs
+cut -f1 -d " " failed.cmds | parallel "gawk 'NR=={}' cnvpytor.cmds" > cnvpytor_rerun_failed.cmds
+
+CNV_RERUN=$(qsub -J1-$(cat cnvpytor_rerun_failed.cmds | wc -l) -l select=1:ncpus=6:mem=8GB,walltime=5:00:00 -N cnvpytor -v "CMDS_FILE=$PWD/cnvpytor_rerun_failed.cmds","WORKDIR=$PWD" ${PWD}/array.pbspro | egrep -o "^[0-9]+")
+```
+
+Find failed jobs and rerun (2). 
+
+```{bash cnvpytor-rerun2}
+
+# find failed jobs and retry
+seq 1 $(cat cnvpytor_rerun_failed.cmds | wc -l) | parallel  "printf {} ; qstat -fx $CNV_RERUN[{}] | grep "Exit_status"" | grep "Exit_status = 1" | cut -f1 -d " " | parallel "gawk 'NR=={}' cnvpytor_rerun_failed.cmds" > cnvpytor_rerun_failed2.cmds
+
+CNV_RERUN2=$(qsub -J1-$(cat cnvpytor_rerun_failed2.cmds | wc -l) -l select=1:ncpus=6:mem=8GB,walltime=5:00:00 -N cnvpytor -v "CMDS_FILE=$PWD/cnvpytor_rerun_failed2.cmds","WORKDIR=$PWD" ${PWD}/array.pbspro | egrep -o "^[0-9]+")
+
+seq 1 $(cat cnvpytor_rerun_failed2.cmds | wc -l) | parallel  "printf {} ; qstat -fx $CNV_RERUN[{}] | grep "Exit_status"" | grep "Exit_status = 1" 
+
+# double check that all files were produced
+wc -l cnvpytor.cmds
+ls -1 *.pytor | egrep -cv "ArME14_gc.pytor"
+ls -1 *calls.tsv | wc -l
+
+```
+
+Merge calls from multiple samples - look at this [link](https://github.com/abyzovlab/CNVpytor#merging-calls-form-multiple-samples)
+
+```{bash cnvpytor-merge}
+# entire population
+pytor_files=$(ls -1 *.pytor | grep -v "ArME14_gc.pytor" | gawk -vORS=" " '1')
+# login to an interactive session on a compute node
+qsub -l select=1:ncpus=6:mem=8GB,walltime=5:00:00 -N cnvpytor_merge -I -X
+cnvpytor -conf $WORK_DIR/ArME14_ref_genome_conf.py -root *.pytor -view 1000
+# then enter these lines in the cnvpytor prompt 
+set Q0_range 0 0.5
+set size_range 1000 inf
+set print_filename A_rabiei_cnvpytor_output.xlsx
+print merged_calls
+
+# 2020 population
+pytor_files=$(ls -1 AR0*.pytor | gawk -vORS=" " '1')
+# login to an interactive session on a compute node
+qsub -l select=1:ncpus=6:mem=8GB,walltime=5:00:00 -N cnvpytor_merge -I -X
+cnvpytor -conf $WORK_DIR/ArME14_ref_genome_conf.py -root *.pytor -view 1000
+# then enter these lines in the cnvpytor prompt 
+set Q0_range 0 0.5
+set size_range 1000 inf
+set print_filename A_rabiei_2020_cnvpytor_output.xlsx
+print merged_calls
+
+
+# alternatively: create script with cnvpytor commands (not working)
+echo "set Q0_range 0 0.5
+set size_range 1000 inf
+set print_filename A_rabiei_cnvpytor_output.xlsx
+print merged_calls" > merge_calls.spytor
+# submit job to the cluster
+echo "cd $PWD; source ~/.bashrc'; conda activate $CONDA_NAME;  < merge_calls.spytor" | qsub -l select=1:ncpus=6:mem=8GB,walltime=5:00:00 -N cnvpytor_merge
+
+```
+
+Interactive analysis with CNVpytor
+```{bash cnvpytor-interactive}
+
+
+
+```
+
+The data produced by CNVPytor was then exported to CloudStor (folder [jemma_cnv](https://cloudstor.aarnet.edu.au/plus/f/6815516595)) and visualised using a Jupyter notebook on [CloudStor SWAN](https://support.aarnet.edu.au/hc/en-us/articles/360000575395-CloudStor-SWAN). See explanation of output in [Predicting CNV regions](https://github.com/abyzovlab/CNVpytor/blob/master/GettingStarted.md#predicting-cnv-regions)
+
+As an alternative to SWAN, the data can be analysed interactively bu launching a Jupyter notebook directly from the Gowonda HPC (see documentation [here](https://griffith.atlassian.net/wiki/spaces/GHCD/pages/4030602/Jupyter+Notebook))
+```{bash cnvpytor-jupyter}
+WORK_DIR=$HOME/aDNA/jemma_cnv
+cd $WORK_DIR
+mamba install -n cnv jupyterlab
+conda activate cnv
+python -m ipykernel install --user --name cnv --display-name "cnvpytor"
+
+# creating a PBS script to run Jupyter
+
+echo '#!/bin/bash
+#PBS -m b
+#PBS -M jemma.tennant@griffithuni.edu.au
+
+#PBS -N cnv_jupyter
+### Add current shell environment to job (comment out if not needed)
+# The jobs working directory
+cd $PBS_O_WORKDIR
+source ~/.bashrc
+source ~/.proxy
+# source /usr/local/bin/s3proxy.sh
+unset PYTHONPATH
+conda activate cnv
+jupyter lab --no-browser --port=5678' > cnvpytor_jupyter.pbs
+
+qsub -l select=1:ncpus=6:mem=8GB,walltime=600:00:00 cnvpytor_jupyter.pbs
+```
 
 ### Population Genetics
 
@@ -1015,7 +1288,7 @@ cat A.rabiei_me14.fasta | sed 's/Arab_Me14_//' > A_rabiei_me14_short_names.fasta
 zcat Arab_me14.gff3.gz | sed 's/Arab_Me14_//' > Arab_me14_short_names.gff
 ```
 
-Variants in coding regions of genes were identified as Synonymous/Non-synonymous/Non-sense mutations if they were silent, changing the amino acid or the reading frame, respectively. Additional annotation of the genes at each SNP site was performed by a BLASTp search against the NCBI non-redundant protein database (nr) and scanning against the InterPro conglomerate dbs. 
+Variants in coding regions of genes were identified as Synonymous/Non-synonymous/Non-sense mutations if they were silent, changing the amino acid or the reading frame, respectively. Additional annotation of the genes at each SNP site was performed by a BLASTp search against the NCBI non-redundant protein database (nr) and scanning against the InterPro conglomerate dbs.
 
 ```{bash interproscan}
 # Download the python wrapper
@@ -1023,7 +1296,7 @@ Variants in coding regions of genes were identified as Synonymous/Non-synonymous
 $HPC_GRID_RUNNER_DIR/BioIfx/hpc_FASTA_GridRunner.pl --cmd_template "cd $PBS_O_WORKDIR; pyenv shell miniconda3-latest; ~/etc/tools/Annotation/InterPro/iprscan5_urllib3.py --sequence=__QUERY_FILE__ --outfile=__QUERY_FILE__.interpro.tsv --outformat=tsv --goterms --pathways --email=i.bar@griffith.edu.au " --query_fasta Assoc_SNP_genes_cds_05_02_2018.fasta -G $HPC_GRID_RUNNER_DIR/hpc_conf/small_PBS_jobs.conf -N 1 -O SNP_interpro
 ```
 
-Effector prediction of the variant-associated genes was performed by `r fontFmt("Predector")` v1.2.6 [@jones2021], following the installation and usage instructions in the [online Wiki documentation](https://github.com/ccdmb/predector/wiki#quick-install) (downloading the external dependencies and building a `conda` environment). 
+Effector prediction of the variant-associated genes was performed by `r fontFmt("Predector")` v1.2.6 [@jones2021], following the installation and usage instructions in the [online Wiki documentation](https://github.com/ccdmb/predector/wiki#quick-install) (downloading the external dependencies and building a `conda` environment).
 
 ```{bash predector}
 # building a conda environment with the external dependencies
@@ -1056,7 +1329,6 @@ Look for particular effector genes and genes associated with plant-pathogen inte
 ### Visualisation
 
 The variants were summarised and visualised across the genome scaffolds and visualised using `r fontFmt("circlize")` v`r packageVersion("circlize")` R package [@gu2014].
-
 
 ### Variant-Pathogenicity association
 
