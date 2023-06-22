@@ -570,13 +570,14 @@ IGNORE_SAMS=$(awk '{printf "^%s\t|",$1}' $RUN_DIR/ignore_samples.txt | sed 's/|$
 # gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $WORK_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | tail -n+2 | sort -k2 | gawk  -F "\t" -v ORS="" 'BEGIN{cmd="picard MergeSamFiles USE_THREADING=true QUIET=true COMPRESSION_LEVEL=0 O=/dev/stdout"}NR==1{printf "%s I=%s/%s.dedup.rg.csorted.bam", cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate!=$2{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s LB=%s PL=Illumina PU=%s SM=%s O=%s.csorted.bam\n%s I=%s/%s.dedup.rg.csorted.bam", isolate, isolate, a[2], isolate,  isolate, cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate==$2{printf " I=%s/%s.dedup.rg.csorted.bam", $1, $1}END{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s LB=%s PL=Illumina PU=%s SM=%s O=%s.csorted.bam\n", isolate, isolate, a[2], isolate,  isolate}'  > $RUN_DIR/merge_bams.cmds
 
 # merge and rename ONLY duplicated samples
-gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $WORK_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | tail -n+2 | sort -k2 | gawk  -F "\t" -v ORS="" 'BEGIN{cmd="picard MergeSamFiles USE_THREADING=true QUIET=true COMPRESSION_LEVEL=0 O=/dev/stdout"}NR==1{printf "%s I=%s/%s.dedup.rg.csorted.bam", cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate!=$2{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s_merged LB=%s_merged PL=Illumina PU=mixed SM=%s O=%s_merged.csorted.bam\n%s I=%s/%s.dedup.rg.csorted.bam", isolate, isolate, isolate,  isolate, cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate==$2{printf " I=%s/%s.dedup.rg.csorted.bam", $1, $1}END{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s_merged LB=%s_merged PL=Illumina PU=mixed SM=%s O=%s_merged.csorted.bam\n", isolate, isolate,  isolate,  isolate}' | gawk 'NF>19' > $RUN_DIR/merge_rename_bams.cmds
+gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $WORK_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"   | sort -k2 | gawk  -F "\t" -v ORS="" 'BEGIN{cmd="picard MergeSamFiles USE_THREADING=true QUIET=true COMPRESSION_LEVEL=0 O=/dev/stdout"}NR==1{printf "%s I=%s/%s.dedup.rg.csorted.bam", cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate!=$2{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s_merged LB=%s_merged PL=Illumina PU=mixed SM=%s_merged O=%s_merged.csorted.bam\n%s I=%s/%s.dedup.rg.csorted.bam", isolate, isolate, isolate,  isolate, cmd, $1, $1; isolate=$2; split($6, a , " "); next}isolate==$2{printf " I=%s/%s.dedup.rg.csorted.bam", $1, $1}END{printf " | picard AddOrReplaceReadGroups SO=coordinate I=/dev/stdin CREATE_INDEX=true ID=%s_merged LB=%s_merged PL=Illumina PU=mixed SM=%s_merged O=%s_merged.csorted.bam\n", isolate, isolate,  isolate,  isolate}' | gawk 'NF>19' > $RUN_DIR/merge_rename_bams.cmds
 
 # run for all files
 MERGE_BAMS=$(qsub -J1-$(cat $RUN_DIR/merge_rename_bams.cmds | wc -l) -l select=1:ncpus=8:mem=16GB,walltime=1:30:00 -N merge_bams -v "CMDS_FILE=$RUN_DIR/merge_rename_bams.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
 
 # rename all individual bams
-gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $WORK_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | tail -n+2 | sort -k2 | gawk  -F "\t" '{isolate=$2; split($6, a , " ");printf "picard AddOrReplaceReadGroups USE_THREADING=true QUIET=true SO=coordinate I=%s/%s.dedup.rg.csorted.bam CREATE_INDEX=true ID=%s_%s LB=%s_%s PL=Illumina PU=%s SM=%s CN=%s O=%s_%s.csorted.bam\n", $1, $1, isolate, $4, isolate, $4, a[2], isolate, $4, isolate, $4}' > $RUN_DIR/rename_bams.cmds
+gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $WORK_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | sort -k2 | gawk  -F "\t" '{isolate=$2; split($6, a , " ");printf "picard AddOrReplaceReadGroups QUIET=true SO=coordinate I=%s/%s.dedup.rg.csorted.bam CREATE_INDEX=true ID=%s_%s LB=%s_%s PL=Illumina PU=%s SM=%s_%s CN=%s O=%s_%s.csorted.bam\n", $1, $1, isolate, $4, isolate, $4,  a[2], isolate, $4, $4, isolate, $4}' > $RUN_DIR/rename_bams.cmds
+# there's an issue if there are 2 files for the same isolate from the same sequencing centre (like 11B and 11C from AgVic)
 
 RENAME_BAMS=$(qsub -J1-$(cat $RUN_DIR/rename_bams.cmds | wc -l) -l select=1:ncpus=8:mem=16GB,walltime=1:30:00 -N rename_bams -v "CMDS_FILE=$RUN_DIR/rename_bams.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
 
@@ -766,54 +767,31 @@ cd !$
 GENOME="$HOME/scratch/data/reference_genomes/Ascochyta_reference_genomes/A.rabiei_me14"
 NCORES=8
 
-
+BAM_DIR=$HOME/scratch/A_rabiei_WGS_2021/All_2018_2020_09_03_2023/
 # Distributed freebayes (each node runs freebayes-parallel on one contig)
 # download script
 wget https://raw.githubusercontent.com/freebayes/freebayes/master/scripts/split_ref_by_bai_datasize.py ~/bin/
 chmod +x ~/bin/split_ref_by_bai_datasize.py
 conda install -n $CONDA_NAME numpy scipy
 # split each contig/chromosome to smaller 1e6 bits
-~/bin/split_ref_by_bai_datasize.py -s 4e5 -r $GENOME.fa.fai $RUN_DIR/AR0321.csorted.bam > $RUN_DIR/ArME14_target_regions_chr.bed
-ln -s $RUN_DIR/ArME14_target_regions_chr.tsv $RUN_DIR/ArME14_target_regions_chr.bed
+~/bin/split_ref_by_bai_datasize.py -s 1e6 -r $GENOME.fa.fai $BAM_DIR/AR0321_AGRF.csorted > $RUN_DIR/ArME14_target_1e6_regions_chr.bed
+ln -s $RUN_DIR/ArME14_target_1e6_regions_chr.tsv $RUN_DIR/ArME14_target_1e6_regions_chr.bed
 # prepare commands
-BAM_FILES=$( find $RUN_DIR -maxdepth 1 -name "*.csorted.bam" -size +1M  | gawk -vORS=" " '1' )
-cut -f1 $GENOME.fa.fai | parallel --dry-run "freebayes-parallel <(grep '{}' ArME14_target_regions_chr.tsv | gawk '{printf \"%s:%s-%s\n\", \$1, \$2, \$3}') \$NCPUS  -f $GENOME.fa -p1 $BAM_FILES > {}.combined.vcf" > freebayes.cmds
+BAM_FILES=$( find $BAM_DIR -maxdepth 1 -name "*.csorted.bam" -size +1M  | gawk -vORS=" " '1' )
+cut -f1 $GENOME.fa.fai | parallel --dry-run "freebayes-parallel <(grep '{}' ArME14_target_regions_chr.tsv | gawk '{printf \"%s:%s-%s\n\", \$1, \$2, \$3}') \$NCPUS  -f $GENOME.fa -g 50000 -C3 -p1 $BAM_FILES > FB_array_output/{}.combined.vcf" > freebayes_g50k_array.cmds
 
 cd $RUN_DIR/pbs_logs
 # send to the cluster
-FREEBAYES=$(qsub -J1-$(cat $RUN_DIR/freebayes.cmds | wc -l) -l select=1:ncpus=8:mem=64GB,walltime=24:00:00 -N freebayes -v "CMDS_FILE=$RUN_DIR/freebayes.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+FREEBAYES=$(qsub -J1-$(cat $RUN_DIR/freebayes_g50k_array.cmds | wc -l) -l select=1:ncpus=8:mem=48GB,walltime=18:00:00 -q sparks2 -N freebayes_array -v "CMDS_FILE=$RUN_DIR/freebayes_g50k_array.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro) # -q sparks2
 
 # check status of jobs
 seq 1 $(cat $RUN_DIR/freebayes.cmds | wc -l) | parallel "qstat -fx $FREEBAYES[{}] | head"
 # repeat failed jobs
-FREEBAYES_FAILED=$(qsub -J7-17:10 -l select=1:ncpus=8:mem=64GB,walltime=36:00:00 -N freebayes -v "CMDS_FILE=$RUN_DIR/freebayes.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+# FREEBAYES_FAILED=$(qsub -J7-17:10 -l select=1:ncpus=8:mem=64GB,walltime=36:00:00 -N freebayes -v "CMDS_FILE=$RUN_DIR/freebayes.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
 
-# merge ind files to a single bam file (keep submission ids)
-BAMS=$( find $RUN_DIR -maxdepth 1 -name "*.csorted.bam" -size +1M  | gawk -v ORS=" " '{print "I="$1}' )
-# BAM_FILES=$( find $RUN_DIR -maxdepth 1 -name "*.csorted.bam" -size +1M  | gawk -vORS=" " '1' )
-# cd $RUN_DIR/pbs_logs
-# merge with sambamba (memory allocation issues)
-# FINAL_MERGE=$( echo "source ~/.bashrc; conda activate $CONDA_NAME; cd $RUN_DIR; set -Eeo pipefail; sambamba merge -t $[NCPUS - 2] All_samples.csorted.combined.bam $BAM_FILES; sambamba depth base --combined All_samples.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fa.fai 50 > ArME14_targets.regions " | qsub -V -l select=1:ncpus=${NCORES}:mem=32GB,walltime=2:00:00 -N Final_merge | egrep -o "^[0-9]+") # 5248672.pbsserver
-# merge with picard (not needed)
-FINAL_MERGE=$( echo "source ~/.bashrc; conda activate $CONDA_NAME; cd $RUN_DIR; set -Eeo pipefail; picard MergeSamFiles CREATE_INDEX=true R=$GENOME.fa SO=coordinate $BAMS O=All_samples.csorted.combined.bam" | qsub -V -l select=1:ncpus=${NCORES}:mem=32GB,walltime=3:00:00 -N Final_merge | egrep -o "^[0-9]+")
-
-# calculate coverage
-ln -s $RUN_DIR/All_samples.csorted.combined.bai $RUN_DIR/All_samples.csorted.combined.bam.bai 
-# conda deactivate
-~/bin/split_ref_by_bai_datasize.py -s 100e6 -r $GENOME.fa.fai $RUN_DIR/All_samples.csorted.combined.bam > $RUN_DIR/All_ArME14_targets_regions.bed
-# run freebayes on combined BAM (stringent)
-cut -f1 $GENOME.fa.fai | parallel --dry-run "freebayes-parallel <(grep '{}' $RUN_DIR/All_ArME14_targets_regions.bed | gawk '{printf \"%s:%s-%s\n\", \$1, \$2, \$3}') \$NCPUS  -f $GENOME.fa -p1 -g 100000 -0 -C 5 $RUN_DIR/All_samples.csorted.combined.bam > $RUN_DIR/All_samples.{}.combined.stringent.vcf" > $RUN_DIR/freebayes_stringent.cmds
-# run freebayes on combined BAM
-FREEBAYES_STRING=$(qsub -J1-$(cat $RUN_DIR/freebayes_stringent.cmds | wc -l) -l select=1:ncpus=8:mem=64GB,walltime=36:00:00 -N freebayes_string -v "CMDS_FILE=$RUN_DIR/freebayes_stringent.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
-# save read groups to file
-sambamba view -H All_samples.csorted.combined.bam | grep '^@RG' > read_groups.txt
-
-
-# filter the files and combine to a single VCF file, 
-CONCAT_FB=$(echo "set -Eeo pipefail; source ~/.bashrc; conda activate $CONDA_NAME; cd $RUN_DIR ; cat $RUN_DIR/All_samples.*.combined.stringent.vcf | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_2020.bwa.fb.stringent.vcf" | qsub -V -l select=1:ncpus=8:mem=16GB,walltime=20:00:00 -N FB_concat | egrep -o "[0-9]+" )
-
+# get variant stats
 MIN_DP=5
-ls -1 ArME14_*.combined.vcf  | parallel --dry-run "printf \"{}\t%s\t%s\t%s\t%s\n\" \$(cat {} | grep -c -v '^#') \$(cat {} | SnpSift filter \"( GEN[?].DP > $MIN_DP ) & ( GEN[?].GT != './.' )\" | gawk '{if (\$0 ~ /^#/ || (length(\$4)==1 && length(\$5)==1)); print \$0}' | grep -c -v '^#') \$(cat {} | SnpSift filter \"( GEN[?].DP > $MIN_DP ) & ( GEN[?].GT != './.' ) & ( QUAL > 20 )\" | gawk '{if (\$0 ~ /^#/ || (length(\$4)==1 && length(\$5)==1)); print \$0}' | grep -c -v '^#') \$(cat {} | SnpSift filter \"( GEN[?].DP > $MIN_DP ) & ( GEN[?].GT != './.' ) & ( QUAL > 30 )\" | gawk '{if (\$0 ~ /^#/ || (length(\$4)==1 && length(\$5)==1)); print \$0}' | grep -c -v '^#') > {}.stats" > $RUN_DIR/vcf_stats.cmds
+ls -1 $RUN_DIR/FB_array_output/ArME14_ctg_*.combined.vcf | parallel --dry-run "printf \"{}\t%s\t%s\t%s\t%s\n\" \$(cat {} | grep -c -v '^#') \$(cat {} | SnpSift filter \"( GEN[?].DP > $MIN_DP ) & ( GEN[?].GT != './.' )\" | gawk '{if (\$0 ~ /^#/ || (length(\$4)==1 && length(\$5)==1)); print \$0}' | grep -c -v '^#') \$(cat {} | SnpSift filter \"( GEN[?].DP > $MIN_DP ) & ( GEN[?].GT != './.' ) & ( QUAL > 20 )\" | gawk '{if (\$0 ~ /^#/ || (length(\$4)==1 && length(\$5)==1)); print \$0}' | grep -c -v '^#') \$(cat {} | SnpSift filter \"( GEN[?].DP > $MIN_DP ) & ( GEN[?].GT != './.' ) & ( QUAL > 30 )\" | gawk '{if (\$0 ~ /^#/ || (length(\$4)==1 && length(\$5)==1)); print \$0}' | grep -c -v '^#') > {}.stats" > $RUN_DIR/vcf_stats.cmds
 
 cd $RUN_DIR/pbs_logs
 
@@ -821,8 +799,51 @@ cd $RUN_DIR/pbs_logs
 VCF_STATS=$(qsub -J1-$(cat $RUN_DIR/vcf_stats.cmds | wc -l) -l select=1:ncpus=8:mem=16GB,walltime=2:00:00 -N vcf_stats -v"CMDS_FILE=$RUN_DIR/vcf_stats.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
 
 
-cat <(printf "file\ttotal_snps\tDP${MIN_DP}_filtered_snps\tQUAL20_filtered_snps\tQUAL30_filtered_snps\n") <(cat $RUN_DIR/*stringent.vcf.stats) > vcf_stats_stringent_$DATE.txt
+cat <(printf "file\ttotal_snps\tDP${MIN_DP}_filtered_snps\tQUAL20_filtered_snps\tQUAL30_filtered_snps\n") <(cat $RUN_DIR/FB_array_output/ArME14_ctg_*.vcf.stats) > vcf_stats_$(date +%d_%m_%Y).txt
 
+# merge called variants
+CONCAT_FB=$(echo "set -Eeo pipefail; source ~/.bashrc; conda activate $CONDA_NAME; cd $RUN_DIR ; cat $RUN_DIR/FB_array_output/ArME14_ctg_*.combined.vcf | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_2020_wgs_ArME14_v2.bwa.fb.vcf" | qsub -V -l select=1:ncpus=8:mem=16GB,walltime=20:00:00 -q sparks2 -N FB_concat | egrep -o "[0-9]+" )
+
+
+
+# merge ind files to a single bam file (keep submission ids)
+# BAMS=$( find $BAM_DIR -maxdepth 1 -name "*.csorted.bam" -size +1M  | gawk -v ORS=" " '{print "I="$1}' )
+# BAM_FILES=$( find $RUN_DIR -maxdepth 1 -name "*.csorted.bam" -size +1M  | gawk -vORS=" " '1' )
+# cd $RUN_DIR/pbs_logs
+# merge with sambamba (memory allocation issues)
+# FINAL_MERGE=$( echo "source ~/.bashrc; conda activate $CONDA_NAME; cd $RUN_DIR; set -Eeo pipefail; sambamba merge -t $[NCPUS - 2] All_samples.csorted.combined.bam $BAM_FILES; sambamba depth base --combined All_samples.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fa.fai 50 > ArME14_targets.regions " | qsub -V -l select=1:ncpus=${NCORES}:mem=32GB,walltime=2:00:00 -N Final_merge | egrep -o "^[0-9]+") # 5248672.pbsserver
+# merge with picard (not needed)
+# FINAL_MERGE=$( echo "source ~/.bashrc; conda activate $CONDA_NAME; cd $RUN_DIR; set -Eeo pipefail; picard MergeSamFiles CREATE_INDEX=true R=$GENOME.fa SO=coordinate $BAMS O=All_samples.csorted.combined.bam" | qsub -V -l select=1:ncpus=${NCORES}:mem=32GB,walltime=3:00:00 -N Final_merge | egrep -o "^[0-9]+")
+
+# calculate coverage
+# ln -s $RUN_DIR/All_samples.csorted.combined.bai $RUN_DIR/All_samples.csorted.combined.bam.bai 
+# conda deactivate
+# ~/bin/split_ref_by_bai_datasize.py -s 100e6 -r $GENOME.fa.fai $RUN_DIR/All_samples.csorted.combined.bam > $RUN_DIR/All_ArME14_targets_regions.bed
+# run freebayes on BAMs (stringent)
+
+cut -f1 $GENOME.fa.fai | parallel --dry-run "freebayes-parallel <(grep '{}' $RUN_DIR/ArME14_target_regions_chr.tsv | gawk '{printf \"%s:%s-%s\n\", \$1, \$2, \$3}') \$NCPUS  -f $GENOME.fa -p1 -g 50000 -0 $BAM_FILES > FB_array_output/{}.combined.stringent.vcf" > $RUN_DIR/freebayes_stringent.cmds
+
+# -0 --standard-filters  Use stringent input base and mapping quality filters                   Equivalent to -m 30 -q 20 -R 0 -S 0
+
+# run freebayes on combined BAM
+FREEBAYES_STRING=$(qsub -J1-$(cat $RUN_DIR/freebayes_stringent.cmds | wc -l) -l select=1:ncpus=8:mem=48GB,walltime=20:00:00 -N freebayes_string -q sparks2 -v "CMDS_FILE=$RUN_DIR/freebayes_stringent.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+# save read groups to file
+# sambamba view -H All_samples.csorted.combined.bam | grep '^@RG' > read_groups.txt
+
+
+MIN_DP=5
+ls -1 $RUN_DIR/FB_array_output/ArME14_ctg_*stringent.vcf  | parallel --dry-run "printf \"{}\t%s\t%s\t%s\t%s\n\" \$(cat {} | grep -c -v '^#') \$(cat {} | SnpSift filter \"( GEN[?].DP > $MIN_DP ) & ( GEN[?].GT != './.' )\" | gawk '{if (\$0 ~ /^#/ || (length(\$4)==1 && length(\$5)==1)); print \$0}' | grep -c -v '^#') \$(cat {} | SnpSift filter \"( GEN[?].DP > $MIN_DP ) & ( GEN[?].GT != './.' ) & ( QUAL > 20 )\" | gawk '{if (\$0 ~ /^#/ || (length(\$4)==1 && length(\$5)==1)); print \$0}' | grep -c -v '^#') \$(cat {} | SnpSift filter \"( GEN[?].DP > $MIN_DP ) & ( GEN[?].GT != './.' ) & ( QUAL > 30 )\" | gawk '{if (\$0 ~ /^#/ || (length(\$4)==1 && length(\$5)==1)); print \$0}' | grep -c -v '^#') > {}.stats" > $RUN_DIR/vcf_string_stats.cmds
+
+cd $RUN_DIR/pbs_logs
+
+# Calculate contig stats
+VCF_STATS_STRING=$(qsub -J1-$(cat $RUN_DIR/vcf_stats.cmds | wc -l) -l select=1:ncpus=8:mem=16GB,walltime=2:00:00 -N vcf_stats -v"CMDS_FILE=$RUN_DIR/vcf_string_stats.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+
+
+cat <(printf "file\ttotal_snps\tDP${MIN_DP}_filtered_snps\tQUAL20_filtered_snps\tQUAL30_filtered_snps\n") <(cat $RUN_DIR/FB_array_output/ArME14_ctg_*stringent.vcf.stats) > vcf_stats_stringent_$(date +%d_%m_%Y).txt
+
+# filter the files and combine to a single VCF file, 
+CONCAT_FB=$(echo "set -Eeo pipefail; source ~/.bashrc; conda activate $CONDA_NAME; cd $RUN_DIR ; cat $RUN_DIR/FB_array_output/ArME14_ctg_*.combined.stringent.vcf | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_2020.bwa.fb.stringent.vcf" | qsub -V -l select=1:ncpus=8:mem=16GB,walltime=20:00:00 -N FB_concat | egrep -o "[0-9]+" )
 
 
 # find and remove empty files
@@ -835,6 +856,118 @@ find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStat
 tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==1' > $FB.failed.cmds
 tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==0' > $FB.successful.cmds
 rm $FB.cmds.p*.*
+
+```
+
+### Calling variants (using Octopus)
+
+Calling variants with [Octopus](https://luntergroup.github.io/octopus) (citation from https://www.nature.com/articles/s41587-021-00861-3) is suggested to be highly accurate (citation from https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-022-08365-3#Sec9).  
+See these [guidelines](https://luntergroup.github.io/octopus/docs/guides/models/population) to call variants from a population
+
+```{bash octopus}
+CONDA_NAME=/export/home/s2978925/miniconda3/envs/snippy
+# install octopus
+conda activate $CONDA_NAME
+mamba install octopus distro seaborn
+cd ~/etc/tools/SNP
+git clone https://github.com/luntergroup/octopus.git
+# set environment variables
+WORK_DIR=$HOME/scratch/A_rabiei_WGS_2021
+BAM_DIR="$WORK_DIR/All_2018_2020_09_03_2023"
+REF_DIR=$HOME/data/reference_genomes/Ascochyta_reference_genomes/ArME14_v2_NCBI
+GENOME="$REF_DIR/ArME14_v2_NCBI"
+PLOIDY=1
+DATE=`date +%d_%m_%Y`
+RUN=Octopus_all_${DATE} # day of run was 02_02_2019
+RUN_DIR=$WORK_DIR/${RUN}
+mkdir -p $RUN_DIR
+cd !$
+# JOB_NAME="BBmap_me14_vars"
+
+NCORES=8
+cp $WORK_DIR/WGS_sequencing_information_summary.txt $RUN_DIR/
+# edit manually to add B/C to duplicate isolates
+# generate a profile of the input read data, which will be used to make new sequence error models.
+# see which sequencing platforms were used
+gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $RUN_DIR/WGS_sequencing_information_summary.txt | cut -f6 | uniq
+# find which samples use which technology
+gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /Illumina/' $RUN_DIR/WGS_sequencing_information_summary.txt | grep -i nextseq
+# generate a profile of the input read data, which will be used to make new sequence error models.
+octopus --threads $NCORES -R $GENOME.fa -I $BAM_DIR/16CUR018_AGRF*.bam -o calls.bcf --data-profile NextSeq500_reads_profile.csv
+~/etc/tools/SNP/profiler.py -P NextSeq500_reads_profile.csv -O NextSeq500.profile
+
+octopus --threads $NCORES -R $GENOME.fa -I $BAM_DIR/16CUR018_merged*.bam -o calls.bcf --data-profile mixed_Illumina_reads_profile.csv
+~/etc/tools/SNP/octopus/scripts/profiler.py -P mixed_Illumina_reads_profile.csv -O mixed_Illumina.profile
+rm calls.bcf
+# or submit to the cluster
+OCTO_PROFILE=$(echo "set -Eeo pipefail; source ~/.bashrc; conda activate $CONDA_NAME; cd $RUN_DIR ; octopus --threads \$NCPUS -R $GENOME.fa -I $BAM_DIR/16CUR018_AGRF*.bam -o calls.bcf --data-profile NextSeq500_reads_profile.csv" | qsub -V -l select=1:ncpus=8:mem=16GB,walltime=2:00:00 -N Octopus_profile_concat | egrep -o "[0-9]+" )
+
+
+# Call variants from individual samples
+printf "AR0106\nAR0107\nAR0113\nAR0118\n11\n5B\n2\n15CUR005\nAGRF_18\nAGRF_08\nF15023\n20" > ignore_samples.txt
+IGNORE_SAMS=$(awk '{printf "^%s\t|",$1}' $RUN_DIR/ignore_samples.txt | sed 's/|$//')
+# For Macrogen Batch (HiSeq2500)
+gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /HiSeq2500/' $RUN_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | sort -k2 | gawk  -v ref="$GENOME.fa" -v bam_dir=$BAM_DIR -F "\t" '{isolate=$2; split($6, a , " ");printf "octopus --threads $NCPUS -R %s -I %s/%s_%s.csorted.bam -P 1 --sequence-error-model PCR.HISEQ-2500 -o %s_%s.bcf \n", ref, bam_dir, isolate, $4, isolate, $4}' > $RUN_DIR/octopus_calls_HiSeq2500.cmds
+
+OCTO_HISEQ25=$(qsub -J1-$(cat $RUN_DIR/octopus_calls_HiSeq2500.cmds | wc -l) -l select=1:ncpus=8:mem=16GB,walltime=2:00:00 -N OCTO_HISEQ25 -v"CMDS_FILE=$RUN_DIR/octopus_calls_HiSeq2500.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+
+# For AgVic Batch (HiSeq3000)
+gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /HiSeq3000/' $RUN_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | sort -k2 | gawk  -v ref="$GENOME.fa" -v bam_dir=$BAM_DIR -F "\t" '{isolate=$2; split($6, a , " ");printf "octopus --threads $NCPUS -R %s -I %s/%s*_%s.csorted.bam -P 1 --sequence-error-model PCR.HISEQ-4000 -o %s_%s.bcf \n", ref, bam_dir, isolate, $4, isolate, $4}' > $RUN_DIR/octopus_calls_HiSeq3000.cmds
+
+# For AGRF Batch (NextSeq)
+gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /NextSeq/' $RUN_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | sort -k2 | gawk  -v ref="$GENOME.fa" -v bam_dir=$BAM_DIR -F "\t" '{isolate=$2; split($6, a , " ");printf "octopus --threads $NCPUS -R %s -I %s/%s_%s.csorted.bam -P 1 --sequence-error-model NextSeq500.profile -o %s_%s.bcf \n", ref, bam_dir, isolate, $4, isolate, $4}' > $RUN_DIR/octopus_calls_NextSeq.cmds
+
+
+# For AGRF Batch (NovaSeq)
+gawk -F "\t" '$3 ~ /Ascochyta rabiei/ && $6 ~ /NovaSeq/' $RUN_DIR/WGS_sequencing_information_summary.txt | egrep -v "$IGNORE_SAMS"  | sort -k2 | gawk  -v ref="$GENOME.fa" -v bam_dir=$BAM_DIR -F "\t" '{isolate=$2; split($6, a , " ");printf "octopus --threads $NCPUS -R %s -I %s/%s*_%s.csorted.bam -P 1 --sequence-error-model PCR.NOVASEQ -o %s_%s.bcf \n", ref, bam_dir, isolate, $4, isolate, $4}' > $RUN_DIR/octopus_calls_NovaSeq.cmds
+
+# For merged samples Batch (mixed)
+ls -1 $BAM_DIR/*merged.csorted.bam | sort | parallel -k --dry-run --rpl "{sample} s:.+/(.+?)_merged.csorted.bam:\1:"  "octopus --threads $NCPUS -R $GENOME.fa -I {} -P 1 --sequence-error-model mixed_Illumina.profile -o {sample}_merged.bcf" > $RUN_DIR/octopus_calls_merged_samples.cmds
+
+
+# --rpl "{file2} s:_R1:_R2:; uq()" --rpl "{files} s:_R1:_R?:; uq()" --rpl "{sample} s:_R1.+::"  
+
+
+gawk  -v ref="$GENOME.fa" -v bam_dir=$BAM_DIR -F "\t" '{isolate=$2; split($6, a , " ");printf "octopus --threads $NCPUS -R %s -I %s/%s*_%s.csorted.bam -P 1 --sequence-error-model PCR.NOVASEQ -o %s_%s.bcf \n", ref, bam_dir, isolate, $4, isolate, $4}' > $RUN_DIR/octopus_calls_NovaSeq.cmds
+
+# BAMS=$(ls -1 $BAM_DIR/*.bam | awk -v ORS=" " '{print $1}')
+ls -1 $BAM_DIR/*.bam > bam_files.txt
+
+ls -1 $RUN_DIR/*.bcf > bcf_files.txt
+# combine variants for a population with
+mkdir Octo_pop_results
+# split joint calling to batches of 20 samples at a time
+seq 1 20 270 | parallel --dry-run sed -n \'{},'{=1 $_=$arg[1]+19 =}'p\' bam_files.txt \> bam_files{}.tmp \; sed -n \'{},'{=1 $_=$arg[1]+19 =}'p\' bcf_files.txt \> bcf_files{}.tmp \; octopus --threads $NCPUS -P 1 -C population -R $GENOME.fa -i bam_files{}.tmp --disable-denovo-variant-discovery --source-candidates-file bcf_files{}.tmp -o Octo_pop_results/All_Arabiei_WGS_samples_{}.octopus.joint.bcf > octopus_population.cmds
+# run the commands
+bash octopus_population.cmds
+OCTO_POP_SET=$(qsub -J1-$(cat $RUN_DIR/octopus_population.cmds | wc -l) -l select=1:ncpus=8:mem=16GB,walltime=2:00:00 -N Octo_pop1 -v"CMDS_FILE=$RUN_DIR/octopus_population.cmds","WORKDIR=$RUN_DIR" ${WORK_DIR}/array.pbspro | egrep -o "^[0-9]+")
+
+# final merge (this takes more than a week, maybe do in parallel by contig, like FB)
+BCFS=$(ls -1 $RUN_DIR/Octo_pop_results/All_Arabiei_WGS_samples_*.octopus.joint.bcf | awk -v ORS=" " '{print $1}')
+
+octopus --threads $NCPUS -P 1 -C population -R $GENOME.fa -i bam_files.txt --disable-denovo-variant-discovery -c $BCFS -o Octo_pop_results/All_Arabiei_WGS_samples.octopus.joint.bcf
+
+# Call octopus on each chromosome
+cut -f1 $GENOME.fa.fai | parallel --dry-run "octopus --threads \$NCPUS -P 1 -C population -T {} -R $GENOME.fa -i bam_files.txt --disable-denovo-variant-discovery -c $BCFS -o Octo_pop_results/All_Arabiei_WGS_samples.{}.octopus.joint.bcf" > $RUN_DIR/octopus_by_chr.cmds
+
+OCTO_POP_FULL=$(echo "set -Eeo pipefail; source ~/.bashrc; conda activate $CONDA_NAME; cd $RUN_DIR ; octopus --threads \$NCPUS -P 1 -C population -R $GENOME.fa -i bam_files.txt --disable-denovo-variant-discovery -c $BCFS -o Octo_pop_results/All_Arabiei_WGS_samples.octopus.joint.bcf" | qsub -V -l select=1:ncpus=12:mem=32GB,walltime=12:00:00 -N Octopus_pop | egrep -o "[0-9]+" )
+```
+
+```{bash dualrnaseq-bbsplit}
+# bbsplit (for RNA-Seq)
+# create index
+bbsplit.sh build=1 ref_chickpea=$HOME/data/reference_genomes/Cicer_arietinum/Car.genome.fa.gz ref_rabiei=$HOME/data/reference_genomes/Ascochyta_reference_genomes/ArME14_v2_NCBI/ArME14_v2_NCBI.fa threads=\$[NCPUS - 2]
+
+ls -1 ~/aDNA/Mumu_RNA-seq/AGRF_CAGRF220911960_H5L5CDSX7_genozip/downsampled_files/*_R1.fastq.gz | parallel -k --dry-run --rpl "{infile} s:_R1:_R#:; uq()" --rpl "{sample} s:.+/(.+?)_H5L5CDSX7_[ACGT\-]+_L004_.+:\1:"  "bbsplit.sh build=1 threads=\$[NCPUS - 2] in={infile} basename={sample}_%_R#.fastq.gz refstats={sample}.bbsplit.stats maxindel=100k ambiguous2=split qtrim=lr" > bbsplit.cmds
+
+BBSPLIT=$(qsub -J1-$(cat bbsplit.cmds | wc -l) -l select=1:ncpus=10:mem=16GB,walltime=2:00:00 -N bbsplit_RNA-Seq -q workq -v"CMDS_FILE=bbsplit.cmds","WORKDIR=$PWD" array.pbspro | egrep -o "^[0-9]+")
+
+# collate stats
+head -n1 sample_25-L11.bbsplit.stats | paste <(echo "sample")  - > stats.headers
+
+ls -1 sample*.stats | parallel --rpl "{sample} s:.bbsplit.stats::" 'tail -n +2 {} | paste <(echo -e "{sample}\n{sample}") -' | cat stats.headers - > all_samples.combined.stats
+
+
 
 ```
 
