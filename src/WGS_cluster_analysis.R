@@ -3,48 +3,128 @@ devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "util.R")
 # CRAN_packages <- c("tidyverse", "RColorBrewer", "ggrepel","GenABEL", "outliers", "SeqArray",
 #                    "SNPRelate","adegenet", "SNPassoc", "vcfR", "glue", "paletteer")
 CRAN_packages <- c("tidyverse","adegenet", "RColorBrewer",  "dendextend", "poppr","glue", #"ComplexHeatmap",
-                   "pvclust", "colorspace", "gplots", "paletteer", "pheatmap", "vcfR", "here")#, 
+                   "pvclust", "colorspace", "gplots", "paletteer", "pheatmap", "vcfR", "here", "readxl")#, 
                    # "ggplotify", "cowplot", "pryr") # "GenABEL", "SNPRelate",
-pacman::p_load(char=CRAN_packages)
+# pak::pak(CRAN_packages)
+pacman::p_load(char=CRAN_packages, install = FALSE)
 
 
 #### Read data files ####
 # Read sample metadata and save to file
-analysis_basename="A_rabiei_2018"
-variant_method <- "snippy_multi"
-analysis_folder <- here("../Snippy_multi_17_07_2019")
+analysis_basename="A_rabiei_2023"
+variant_method <- "Freebayes"
+analysis_folder <- "../FB_all_22_05_2023"
 analysis_outdir <- here(glue("output/{variant_method}"))
 
-samples_table <- readxl::read_excel(here("sample_info/A_rabiei_isolate_list_for_wgs.xlsx"),
-                                    "sample_details_full")
+
 # read isolate sequencing info
-sequencing_table <- readxl::read_excel(here("sample_info/A_rabiei_isolate_list_for_wgs.xlsx"),sheet = "submission_info") 
+sequencing_table <- readxl::read_excel(here("sample_info/A_rabiei_isolates_WGS_metadata.xlsx"), sheet = "merged_table") 
+
+discard_samples <- sequencing_table %>% filter(grepl("Do not use|Use merged", Comments)) %>% 
+  select(VCF_name) %>%  
+  write_csv("sample_info/duplicated_samples.csv", col_names = FALSE) %>% unlist()
+
+# isolate metadata 
+samples_table <- readxl::read_excel(here("sample_info/Summary_tables_AR_2013-2022.xlsx"),
+                                    "samples_db") #%>% filter(Isolate %in% sequencing_table$Isolate)
 
 # read DArT-based clustering
 dart_clusters <- readxl::read_excel(here("../../A_rabiei_DArT/output/A_rabiei_DArT_poppr.xlsx"), 
                                     "MLG_Cluster_table") %>%   select(-Pathotype)
 
 
-vcf_file <- file.path(analysis_folder, "core.vcf")
-vcf <- read.vcfR(vcf_file)
-clean_vcf <- vcf
-sample_cols <- colnames(extract.gt(clean_vcf))
-#### adegenet ####
-genind_obj <- vcfR2genind(vcf) # clean_vcf
-ploidy(genind_obj) <- 1
-summary(genind_obj)
+vcf_file <- list.files(file.path(analysis_folder, "Filtered"), "A_rabiei_2018_2020.bwa.fb.stringent.Q20.GT95.noRep.poly.vcf", full.names = TRUE)
 
-samples_strata <- samples_table %>% slice(match(indNames(genind_obj), Isolate)) %>% 
-  dplyr::select(Isolate, State, Year, Host, Pathogenicity, Patho.Group) %>% 
+vcf <- read.vcfR(vcf_file)
+vcf_samples <- colnames(extract.gt(vcf))
+# ?vcfR::write.fasta
+sum(!vcf_samples %in% discard_samples)
+clean_vcf <- vcf#[,!vcf_samples %in% discard_samples]
+sample_cols <- colnames(extract.gt(clean_vcf))
+sample_names <- sub("_.+?$", "", colnames(extract.gt(clean_vcf)))
+
+# phenotyping scores
+raw_disease_scores <- read_excel("sample_info/raw_pheno_summary_scores.xlsx", 
+                                 sheet = "isolate_genotype_trait_scores") %>% 
+  inner_join(tibble(Isolate=sample_names), .)
+
+
+# save phenotypes in wide format for GWAS
+raw_disease_scores %>% group_by(Isolate, Genotype) %>% 
+  summarise(mean_score=mean(mean_score)) %>% 
+  pivot_wider(names_from = Genotype, values_from = mean_score) %>% 
+  # left_join(tibble(Isolate=indNames(genind_obj)), .) %>% 
+  filter(if_all(where(is.double), ~!is.na(.))) %>% 
+  setNames(sub(" ", "_", names(.))) %>%
+  write_xlsx(., "output/pheno_summary_scores_GWAS.xlsx", 
+             sheet = "isolate_mean_scores_wide", overwritesheet=TRUE)
+
+raw_disease_scores %>% group_by(Isolate, Genotype) %>% 
+  filter(Trait=="Leaf Score") %>% 
+  # summarise(mean_score=mean(mean_score)) %>% 
+  pivot_wider(names_from = Genotype, values_from = mean_score) %>% 
+  # left_join(tibble(Isolate=indNames(genind_obj)), .) %>% 
+  filter(if_all(where(is.double), ~!is.na(.))) %>% 
+  setNames(sub(" ", "_", names(.))) %>%
+  write_xlsx(., "output/pheno_summary_scores_GWAS.xlsx", 
+             sheet = "isolate_mean_leaf_scores_wide", overwritesheet=TRUE)
+
+raw_disease_scores %>% group_by(Isolate, Genotype) %>% 
+  filter(Trait=="Stem Score") %>% 
+  # summarise(mean_score=mean(mean_score)) %>% 
+  pivot_wider(names_from = Genotype, values_from = mean_score) %>% 
+  # left_join(tibble(Isolate=indNames(genind_obj)), .) %>% 
+  filter(if_all(where(is.double), ~!is.na(.))) %>% 
+  setNames(sub(" ", "_", names(.))) %>%
+  write_xlsx(., "output/pheno_summary_scores_GWAS.xlsx", 
+             sheet = "isolate_mean_stem_scores_wide", overwritesheet=TRUE)
+
+
+samples_table %>% 
+  inner_join(tibble(Isolate=sample_names), .) %>% 
+  select(Isolate, Patho_group=Path_rating) %>% 
+  filter(!is.na(Patho_group)) %>%
+  write_xlsx(., "output/pheno_summary_scores_GWAS.xlsx", 
+             sheet = "isolate_Patho_group", overwritesheet=TRUE)
+
+missing_pheno_samples <- tibble(sample_cols) %>% 
+  filter(!grepl(paste(unique(raw_disease_scores$Isolate), 
+                      collapse = "|"),sample_cols)) %>% 
+  write_csv("sample_info/missing_pheno_samples.csv", col_names = FALSE)
+
+
+
+#### adegenet ####
+genind_obj <- vcfR2genind(clean_vcf) # clean_vcf
+ploidy(genind_obj) <- 1
+# summary(genind_obj)
+indNames(genind_obj) <- sub("_.+?$", "", indNames(genind_obj))
+# create a metadata file
+samples_strata <- tibble(Isolate=indNames(genind_obj)) %>% 
+  left_join(samples_table) %>% # slice(match(indNames(genind_obj), Isolate)) %>% 
+  dplyr::select(Isolate, State, Year, Genotype, Path_rating, weighted_score) %>% 
   left_join(dart_clusters, by=c("Isolate"="Ind")) %>% rename(GBS_cluster = Cluster_fact) %>% 
   mutate(State=factor(State, levels = c("QLD", "NSW", "VIC", "SA", "WA")),
          GBS_cluster=factor(GBS_cluster), 
          MLG=factor(as.character(MLG)),
-         Host=factor(Host),
+         Host=factor(Genotype), 
          # Year=factor(Year, levels = sort(unique(Year))),
-         Patho.Group=factor(Patho.Group, levels=paste0("Group", 0:5))) %>%
-  mutate_if(is.factor, ~fct_explicit_na(., na_level = "Unknown"))#%>% 
+         Patho.Group=factor(paste0("Group", as.character(Path_rating)), levels=paste0("Group", 0:5))) %>%
+  mutate_if(is.factor, ~fct_na_value_to_level(., level = "Unknown"))#%>% 
   # mutate_all(~replace_na(..1, "Unknown"))
+
+
+# save phenotypes in wide format for GWAS
+# tibble(Isolate=indNames(genind_obj)) %>% 
+#   left_join(samples_table) %>% # slice(match(indNames(genind_obj), Isolate)) %>% 
+#   dplyr::select(Isolate, Path_rating, weighted_score) %>% 
+#   # left_join(tibble(Isolate=indNames(genind_obj)), .) %>% 
+#   filter(is.na(weighted_score))
+#   filter(if_all(where(is.double), ~!is.na(.))) %>% 
+#   setNames(sub(" ", "_", names(.))) %>%
+#   write_xlsx(., "sample_info/raw_pheno_summary_scores.xlsx", 
+#              sheet = "isolate_mean_scores_wide", overwritesheet=TRUE)
+
 
 # Assign samples factors to Strata
 genind_obj@strata <- samples_strata %>% as.data.frame() #%>% 
@@ -114,11 +194,11 @@ ncores=parallel::detectCores()-1
 favourite_pals <- setNames(c("awtools", "rcartocolor", "RColorBrewer", "ggsci"), 
                            c("mpalette", "Bold", "Set1", "category10_d3"))  
 my_colours = list(
-  State = levels(samples_strata$State) %>% setNames(as.character(paletteer_d("RColorBrewer::Set1", length(.))), .),
+  State = levels(samples_strata$State) %>% setNames(c(as.character(paletteer_d("RColorBrewer::Set1", length(.)-1)),"grey1") , .),
   Year = sort(unique(samples_strata$Year)) %>% setNames(as.character(paletteer_d("ggsci::default_uchicago", length(.))), .),
   Patho.Group = levels(samples_strata$Patho.Group) %>% 
-    setNames(as.character(paletteer_d("RColorBrewer::RdYlGn", direction = -1))[round(seq(4,11, length.out = length(.)) ,0)], .),
-  Host = levels(samples_strata$Host) %>% setNames(as.character(paletteer_d("RColorBrewer::Dark2", length(.))), .),
+    setNames(c(as.character(paletteer_d("RColorBrewer::RdYlGn", direction = -1))[round(seq(4,11, length.out = length(.)-1) ,0)], "grey1"), .),
+  #Host = levels(samples_strata$Host) %>% setNames(as.character(paletteer_d("RColorBrewer::Dark2", length(.))), .),
   GBS_cluster = levels(samples_strata$GBS_cluster) %>% 
     setNames(c(as.character(paletteer_d("rcartocolor::Bold", n=length(.)-1)), "grey1"), .)
 )
@@ -244,11 +324,40 @@ amova.cc.test$pvalue
 # Heatmap ####
 # correct clone
 Arab_cc <- clonecorrect(genind_obj, strata = NA)#, keep = 1:2)
+Arab_gl <- dartR::gi2gl(Arab_cc)
+
+strata(Arab_gl) <- genind_obj@strata
+# indNames(Arab_gl)
+ploidy(Arab_gl) <- 1
+
+# export distance for GWAS
+# calculate distance
+bitwise.euc <- function(x) bitwise.dist(x, euclidean = TRUE, missing_match = FALSE)
+gwas_gl_mat <- Arab_gl %>% dartR::gl.keep.ind(ind.list = unique(raw_disease_scores$Isolate), 
+                                          recalc = TRUE, mono.rm = TRUE, verbose = 3) %>% 
+  bitwise.dist(Arab_gl, euclidean = TRUE, missing_match = FALSE,  mat = TRUE)
+write.table(gwas_gl_mat, "output/gwas_samples_dist_mat.txt", sep = "\t")  
+Arab_cc.mat <- 
+
 # pop(gen_clone)
 # calculate distance
-Arab_cc.mat <- diss.dist(Arab_cc, mat = TRUE)
-Arab_cc.dist <- diss.dist(Arab_cc, mat = FALSE)
-heatmap_metadata <- genind_obj@strata %>% 
+bitwise.euc <- function(x) bitwise.dist(x, euclidean = TRUE, missing_match = FALSE)
+Arab_cc.mat <- bitwise.dist(Arab_gl, euclidean = TRUE, missing_match = FALSE,  mat = TRUE)
+Arab_cc.dist <- bitwise.dist(Arab_gl, euclidean = TRUE, missing_match = FALSE, mat = FALSE)
+# test <- Arab_gl %>% aboot(cutoff = 50, quiet = TRUE, sample = 10, distance = bitwise.euc)
+pop_dist <- Arab_gl   %>%
+  # genind2genpop(pop = ~pop) %>%
+  aboot(cutoff = 50, quiet = TRUE, sample = 1000, distance = bitwise.euc)
+# pop_tree_data <- as_tibble(tree) %>% left_join(strata_factors, by = c("label"="id")) %>% 
+#   as.treedata()
+pop_tree_data <- as_tibble(pop_tree) %>% 
+  left_join(strata_factors %>% group_by(pop) %>% 
+              slice(1), by = c("label"="pop")) %>% 
+  # mutate(id=label, label=pop) %>% 
+  as.treedata()
+
+
+heatmap_metadata <- Arab_gl@strata %>% 
   mutate(Year=factor(Year, levels = sort(unique(Year)))) %>% 
   mutate_if(is.character, ~factor(replace_na(.x, "NA"))) %>% 
 column_to_rownames("Isolate")
@@ -279,7 +388,7 @@ column_to_rownames("Isolate")
 #   setNames(c(as.character(paletteer_d(glue::glue("{favourite_pals[2]}::{names(favourite_pals[2])}"),
 #                                     n=length(.)-1)), "gray80"), .)
 # )
-cluster_num <- 3
+cluster_num <- 6
 
 Heatmap(Arab_cc.mat, col = paletteer_c("viridis::viridis", 50, direction = -1), name = "Genetic distance", 
             )
@@ -288,9 +397,9 @@ dist_heatmap <- pheatmap(Arab_cc.mat, show_rownames = FALSE, show_colnames = FAL
                          annotation_colors = my_colours,
                          # clustering_distance_rows = dist_matrix, clustering_distance_cols = dist_matrix,
                          annotation_row = heatmap_metadata[c("State")], #"Year", "Host"
-                         annotation_col = heatmap_metadata[c("Patho.Group", "GBS_cluster")], 
+                         annotation_col = heatmap_metadata[c("Patho.Group")], # , "GBS_cluster"
                          cutree_rows = cluster_num, cutree_cols = cluster_num , 
-             filename = glue("{analysis_outdir}/plots/A_rabiei_WGS_heatmap_{cluster_num}clusters.pdf"),
+             filename = filedate(glue("A_rabiei_WGS_heatmap_{cluster_num}clusters"),ext="pdf", outdir = glue("{analysis_outdir}/plots/")),
                          width = 8, height = 6.5)
 
 
@@ -303,8 +412,6 @@ plot(hclust(Arab_cc.dist))
 
 
 
-
-
 # clustering with pvclust
 ibs.pv <- pvclust(Arab_cc.mat, nboot=500, parallel=TRUE, )
 plot(ibs.pv)
@@ -313,6 +420,8 @@ ibs.clust <- pvpick(ibs.pv, alpha=0.99)
 Colv  <- as.dendrogram(Arab_cc.dist) %>%
   branches_attr_by_labels(ibs_meta$Sample, TF_values = c(2, Inf), attr = c("lwd")) %>%
   ladderize
+
+
 
 
 X <- tab(Arab_cc, freq = TRUE, NA.method = "mean")

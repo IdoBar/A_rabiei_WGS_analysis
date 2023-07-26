@@ -2,29 +2,41 @@
 devtools::source_gist("7f63547158ecdbacf31b54a58af0d1cc", filename = "util.R")
 
 # load packages we're going to use
-pacman::p_load(tidyverse, vcfR, R.utils, RColorBrewer, ggrepel, glue)
+pacs <- c("tidyverse", "vcfR", "R.utils", "RColorBrewer", "ggrepel", "glue")
+# pak::pak(pacs)
+pacman::p_load(char = pacs, install=FALSE)
 
 # maybe reset genotype calls in which the Alternative allele depth is more than 5% than the Reference allele depth
 
 #### Estimate error rates ####
-analysis_name <- "Snippy_multi_07_07_2019"
+analysis_name <- "Octopus_all_25_05_2023"
 analysis_folder <- file.path("..", analysis_name)
 analysis_outdir <- "./output/duplicate_analysis/"
+
 # load sequencing table
-sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx",
-                                       sheet = "submission_info") %>% #arrange(Isolate) %>% 
+sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolates_WGS_metadata.xlsx",
+                                       sheet = "merged_table") %>% #arrange(Isolate) %>% 
   group_by(Isolate) %>% 
   mutate(counter=row_number(), Isolate_head=paste(Isolate, counter, sep="."))
 
-snippy_sample_tbl <- read_tsv(file.path(analysis_folder, "snippy_input_samples.tab"),
-                              col_names = c("snippy_name", "Read1", "Read2")) %>% 
-  mutate(Submission_id=sub("trimmed_(.+)_R1.fastq.gz", "\\1", Read1))
-snippy_dict <- setNames(snippy_sample_tbl$snippy_name, 
-                         snippy_sample_tbl$Submission_id)
-samples_dict <- setNames(sequencing_table$Isolate_head, sequencing_table$Submission_id)
+
+
+
+# snippy_sample_tbl <- read_tsv(file.path(analysis_folder, "snippy_input_samples.tab"),
+#                               col_names = c("snippy_name", "Read1", "Read2")) %>% 
+#   mutate(Submission_id=sub("trimmed_(.+)_R1.fastq.gz", "\\1", Read1))
+# snippy_dict <- setNames(snippy_sample_tbl$snippy_name, 
+#                          snippy_sample_tbl$Submission_id)
+# samples_dict <- setNames(sequencing_table$Isolate_head, sequencing_table$Submission_id)
 source("./src/estimate_error_rates_vcf_files.R")
 # load VCF file (Bowtie2 pipeline)
-filtered_vcf_files <- file.path(analysis_folder, "core.vcf")
+filtered_vcf_files <- c(list.files(analysis_folder, pattern = "All_Arabiei_WGS_samples.octopus.joint.Q20.GT90.noRep.poly.vcf", full.names = TRUE),
+                        list.files("../FB_all_22_05_2023/Filtered", pattern = "noRep.poly.vcf", full.names = TRUE))
+                        
+
+# filtered_vcf_files <- file.path(analysis_folder, "core.vcf") 
+
+
 # error_rates <- tibble()
 # for (f in filtered_vcf_files){
 #   # f <- filtered_vcf_files[1]
@@ -40,10 +52,25 @@ filtered_vcf_files <- file.path(analysis_folder, "core.vcf")
 #   
 #   error_rates <- rbind(error_rates, estimate_error_rates(paste0(f, ".fixed"), grouping_suffix = ".[0-9]+$"))
 # }
-error_rates <- estimate_error_rates(filtered_vcf_files[1], 
-                                    grouping_suffix = "[abcdefg]") %>% 
-write_xlsx(., excel_file = "output/results/pipeline_comparison.xlsx",
-                     sheet=analysis_name, overwritefile=FALSE, asTable = TRUE )
+snippy_error_rates <- estimate_error_rates("../AGRF_snippy_12_05_2021/snippy_core_17_05_2021.vcf", grouping_suffix = "_R")
+
+error_rates <- filtered_vcf_files %>% map_dfr(.f = ~estimate_error_rates(.x, 
+                                    grouping_suffix = "R*_\\w+")) 
+error_rates %>% print(n=Inf)
+
+# error_rates_FB <- estimate_error_rates(filtered_vcf_files[2], grouping_suffix = "R*_\\w+")
+error_rates %>% bind_rows(snippy_error_rates) %>% 
+  mutate(Analysis=sub(".+?/(.+?)/.+", "\\1", vcf_file)) %>% relocate(Analysis) %>% janitor::clean_names("title", abbreviation="VCF") %>% 
+  write_xlsx(., excel_file = "output/variant_calling_pipeline_comparison.xlsx",
+                     sheet="pipeline_comparison", replacefile = TRUE, asTable = TRUE, overwritesheet = TRUE )
+
+error_rates %>% bind_rows(snippy_error_rates) %>% mutate(Analysis=sub(".+?/(.+?)/.+", "\\1", vcf_file)) %>% 
+  group_by(Analysis) %>% summarise(across(where(is.numeric), mean)) %>% 
+  janitor::clean_names("title", abbreviation="VCF") %>% 
+  write_xlsx(., excel_file = "output/variant_calling_pipeline_comparison.xlsx",
+             sheet="pipeline_comparison_sum", asTable = TRUE, overwritesheet = TRUE )
+
+
 
 # Check how to compare the error rates for each group.
 # error_rates_sum <- error_rates %>% arrange(replicate_group) %>% mutate(analysis=str_extract(vcf_file, "FB_vars.+_2019")) %>% 

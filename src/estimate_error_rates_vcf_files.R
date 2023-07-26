@@ -15,7 +15,8 @@ estimate_error_rates <- function(vcf_input, grouping_suffix){
   error_rates_df <- tibble(vcf_file=character(),
                                replicate_group=character(),
                                locus_error_rate=numeric(),
-                               allele_error_rate=numeric())
+                               allele_error_rate=numeric(),
+                               loci_n=numeric())
                                # stringsAsFactors=FALSE)
   # i=1
   vcf_data <- read_tsv(vcf_input, comment = "##") #%>%
@@ -66,7 +67,8 @@ estimate_error_rates <- function(vcf_input, grouping_suffix){
 
     error_rates_df <- tibble("vcf_file"=vcf_input, "replicate_group"=r, "replicate_num"=nrow(replicates),
                                  "locus_error_rate"=locus_error_rate,
-                                 "allele_error_rate"=allele_error_rate) %>%
+                                 "allele_error_rate"=allele_error_rate,
+                             loci_n=nrow(marker_errors)) %>%
       bind_rows(error_rates_df, .)
 
   }

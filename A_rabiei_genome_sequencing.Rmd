@@ -36,9 +36,22 @@ knitr::opts_chunk$set(list(echo = TRUE, eval=FALSE, message=FALSE))
  # CRAN settings
 chooseCRANmirror(ind=1)
 options(repos = getOption("repos")["CRAN"]) # fix the annoying "unable to access index..."
-pacman::p_load(tidyverse, readxl, scales, janitor, paletteer, VariantAnnotation, cn.mops,
-               htmltools, ggrepel, here,  DT, plotly, mmod, poppr, circlize, downloadthis,
-               tabulizer, htmltab)
+req_pacs <- c("tidyverse", 'readxl', 'scales', 'janitor', 'paletteer', 'VariantAnnotation', "cn.mops", "htmltools", 
+              'ggrepel', 'here',  'DT', 'plotly', 'mmod', 'poppr', 'circlize', "downloadthis", "tabulizer", "htmltab/htmltab")
+
+better_p_load <- function(packages){
+  safely_p_load <- purrr::safely(pacman::p_load)
+  # basename("htmltab/htmltab")
+  try_load <- safely_p_load(char=basename(packages), install = FALSE)
+  if (!all(try_load$result==TRUE) | !is.null(try_load$error)) pak::pak(packages)
+  try_load <- safely_p_load(char=basename(packages), install = FALSE)
+}
+
+  
+better_p_load(req_pacs)
+# pacman::p_load(tidyverse, readxl, scales, janitor, paletteer, VariantAnnotation, cn.mops,
+#                htmltools, ggrepel, here,  DT, plotly, mmod, poppr, circlize, downloadthis,
+#                tabulizer, htmltab, install = FALSE)
 pacman::p_load_gh('Mikata-Project/ggthemr')
 # Connect to Zotero to access references
 # biblio <- ReadBib("data/Fungal_genomes.bib") # , "bibtex", "RefManageR"
@@ -64,7 +77,7 @@ fontFmt = function(x,font="consolas"){
 # patho_table <- read_excel("../samples_db/output/A_rabiei_pathotypes_2013-2020.xlsx", sheet = "pathotyping")
 cloudstor_links_2018 <- hyperlinks_from_excel(here("sample_info/A_rabiei_isolate_list_for_wgs.xlsx"), 
                                          ExcelSheet = "submission_info") %>% 
-                    select(target, CloudStor_Folder=text) %>% 
+                    dplyr::select(target, CloudStor_Folder=text) %>% 
                     distinct()
 
 sequencing_table_2018 <- read_excel(here("sample_info/A_rabiei_isolate_list_for_wgs.xlsx"), 
@@ -74,14 +87,14 @@ sequencing_table_2018 <- read_excel(here("sample_info/A_rabiei_isolate_list_for_
 
 cloudstor_links_2020 <- hyperlinks_from_excel(here("sample_info/AGRF_NGS_yield.xlsx"), 
                                          ExcelSheet = "AGRF_NGS_yield") %>% 
-                    select(target, CloudStor_Folder=text) %>% 
+                    dplyr::select(target, CloudStor_Folder=text) %>% 
                     distinct()
 
 sequencing_table_2020 <- read_excel(here("sample_info/AGRF_NGS_yield.xlsx"), 
                                sheet = "AGRF_NGS_yield") %>% 
   left_join(cloudstor_links_2020)
 sequencing_table <- sequencing_table_2020 %>% 
-  select(Submission_id=`Sample Name`, Isolate, CloudStor_Folder, target) %>% 
+  dplyr::select(Submission_id=`Sample Name`, Isolate, CloudStor_Folder, target) %>% 
   mutate(Sequencing_Centre="AGRF") %>% 
   bind_rows(sequencing_table_2018 )
   
@@ -92,7 +105,7 @@ samples_table <- readxl::read_excel(here("sample_info/Summary_tables_AR_2020.xls
   
 # 
 # 
-# samples_table <- selected_samples %>% left_join(patho_table %>% select(Isolate, Year, Pathogenicity=Path_rating)) %>% 
+# samples_table <- selected_samples %>% left_join(patho_table %>% dplyr::select(Isolate, Year, Pathogenicity=Path_rating)) %>% 
 #   arrange(Isolate)
 
 #readxl::read_excel("../P_rabiei_isolate_list_for_wgs.xlsx", sheet = "Sequenced") %>%
@@ -119,7 +132,7 @@ Details of the sequenced isolates is provided in (Table \@ref(tab:samples-table)
 DT_caption("samples-table", HTML("<i>Ascochyta rabiei</i> samples used in this study."))
 
 DT_samples_table <- samples_table %>% 
-  select(-any_of(c("Sample_Id", "Isolate_Code", "Supplied_by", "Delivered_to", "Collection_Date",
+  dplyr::select(-any_of(c("Sample_Id", "Isolate_Code", "Supplied_by", "Delivered_to", "Collection_Date",
                    "Isolate_Usq", "Comment", "Genotyped", "Path_rating2", "lat", "lon"))) %>% 
   relocate(Isolate, .before = 1)
 DT_samples_table   %>% 
@@ -445,7 +458,7 @@ rm raw.sam raw_R*.fq.gz
 
 ### Mapping to the updated reference genome
 
-Reads are mapped to the *A. rabiei* reference genome assembled and annotated by Dr. Fredrick Mobegi (the CCDM, Curtin University, add NCBI accession when available) using `r fontFmt("bwa-mem2")` v2.2.1 [@vasimuddin2019]. The alignment files were then coordinate-sorted and had PCR duplicates marked using `bamsormadup` from `r fontFmt("biobambam2")` v2.0.182 [@tischler2014].\
+Reads are mapped to the *A. rabiei* reference genome assembled and annotated by Dr. Fredrick Mobegi (the CCDM, Curtin University, add NCBI accession when available) using `r fontFmt("bwa-mem2")` v2.2.1 [@vasimuddin2019]. The alignment files were then coordinate-sorted and had PCR duplicates marked using `bamsormadup` from `r fontFmt("biobambam2")` v2.0.183 [@tischler2014].\
 To improve performance, temporary files were written to a local `lscratch` folder on the computing node.
 
 ```{bash prep_updated_genomes}
@@ -645,7 +658,7 @@ Error rates were estimated by individually processing the duplicate samples and 
 # # analysis_outdir <- glue("./output/{variant_method}/")
 # error_rates <- readxl::read_excel("output/results/pipeline_comparison.xlsx",
 #                                   sheet = "Snippy_multi_07_07_2019") %>%
-#   select(-vcf_file)
+#   dplyr::select(-vcf_file)
 # mean_allele_error <- mean(error_rates$allele_error_rate)
 # stats_table <- read_tsv(file.path(analysis_folder,"core.txt"))
 
@@ -675,7 +688,7 @@ qualimap_results <-  qualimap_files %>% .[grepl("/All", .)] %>%
   right_join(sequencing_table, .) %>% 
   relocate(Comments, .after = last_col()) %>% 
   relocate(Isolate, .before = 1) %>% 
-  # left_join(., error_rates %>% select(Isolate=replicate_group, Error_rate=allele_error_rate,
+  # left_join(., error_rates %>% dplyr::select(Isolate=replicate_group, Error_rate=allele_error_rate,
   #                                      Replicates=replicate_num)) %>%
   mutate(cloudstor_folder= glue::glue('<a href="{target}" target="_blank">{CloudStor_Folder}</a>')) %>% 
   select(-any_of(c("target", "CloudStor_Folder")))  %>% 
@@ -861,8 +874,7 @@ rm $FB.cmds.p*.*
 
 ### Calling variants (using Octopus)
 
-Calling variants with [Octopus](https://luntergroup.github.io/octopus) (citation from https://www.nature.com/articles/s41587-021-00861-3) is suggested to be highly accurate (citation from https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-022-08365-3#Sec9).  
-See these [guidelines](https://luntergroup.github.io/octopus/docs/guides/models/population) to call variants from a population
+Calling variants with [Octopus](https://luntergroup.github.io/octopus) v0.7.4 [@cookeUnifiedHaplotypebasedMethod2021] was suggested to be highly accurate [@barbitoffSystematicBenchmarkStateoftheart2022] and was therefore also used to call variants from the read files.  `r fontFmt("Octopus")` was used to call the variants from the population of samples using a map-reduce strategy, following the recommended [guidelines](https://luntergroup.github.io/octopus/docs/guides/models/population).
 
 ```{bash octopus}
 CONDA_NAME=/export/home/s2978925/miniconda3/envs/snippy
@@ -953,22 +965,60 @@ cut -f1 $GENOME.fa.fai | parallel --dry-run "octopus --threads \$NCPUS -P 1 -C p
 OCTO_POP_FULL=$(echo "set -Eeo pipefail; source ~/.bashrc; conda activate $CONDA_NAME; cd $RUN_DIR ; octopus --threads \$NCPUS -P 1 -C population -R $GENOME.fa -i bam_files.txt --disable-denovo-variant-discovery -c $BCFS -o Octo_pop_results/All_Arabiei_WGS_samples.octopus.joint.bcf" | qsub -V -l select=1:ncpus=12:mem=32GB,walltime=12:00:00 -N Octopus_pop | egrep -o "[0-9]+" )
 ```
 
-```{bash dualrnaseq-bbsplit}
-# bbsplit (for RNA-Seq)
-# create index
-bbsplit.sh build=1 ref_chickpea=$HOME/data/reference_genomes/Cicer_arietinum/Car.genome.fa.gz ref_rabiei=$HOME/data/reference_genomes/Ascochyta_reference_genomes/ArME14_v2_NCBI/ArME14_v2_NCBI.fa threads=\$[NCPUS - 2]
 
-ls -1 ~/aDNA/Mumu_RNA-seq/AGRF_CAGRF220911960_H5L5CDSX7_genozip/downsampled_files/*_R1.fastq.gz | parallel -k --dry-run --rpl "{infile} s:_R1:_R#:; uq()" --rpl "{sample} s:.+/(.+?)_H5L5CDSX7_[ACGT\-]+_L004_.+:\1:"  "bbsplit.sh build=1 threads=\$[NCPUS - 2] in={infile} basename={sample}_%_R#.fastq.gz refstats={sample}.bbsplit.stats maxindel=100k ambiguous2=split qtrim=lr" > bbsplit.cmds
+#### VCF filtering
+Variants were filtered using a combination of commands from `r fontFmt("SnpSift")` v5.1d [@ruden_using_2012], `r fontFmt("BCFtools")` v1.17 [@danecekTwelveYearsSAMtools2021; @liStatisticalFrameworkSNP2011] and VCFtools v0.1.16 [@danecekVariantCallFormat2011a], based on their total loci depth, keeping only SNP loci with an average of 20 (per genotype) and not more than 100000 reads covering the locus (based on EDA). In addition, each isolate's genotype call was wiped (recoded as missing, or `./.`) if it had read depth (`DP<7`).
 
-BBSPLIT=$(qsub -J1-$(cat bbsplit.cmds | wc -l) -l select=1:ncpus=10:mem=16GB,walltime=2:00:00 -N bbsplit_RNA-Seq -q workq -v"CMDS_FILE=bbsplit.cmds","WORKDIR=$PWD" array.pbspro | egrep -o "^[0-9]+")
+```{bash vcf_filter}
+# Recode genotypes as missing if below a certain threshold, such as genotyping quality or depth (GQ:DP)  
+# filter only polymorphic SNPs, using QUAL>20, DP<36000/20000
+QUAL=20
+MAX_DP=100000
+MIN_DP=10
+IND_DP=7
+# filter Freebayes variants (wipe any genotype with DP<7)
+SnpSift filter "( QUAL>$QUAL ) & ( TYPE='snp' ) & ( DP<$MAX_DP ) & ( DP>$MIN_DP ) & ( countRef()>=1 & countVariant()>=1 )" A_rabiei_2018_2020.bwa.fb.stringent.vcf.gz | SnpSift gtfilter -gv './.' "( DP<$IND_DP )" > A_rabiei_2018_2020.bwa.fb.stringent.Q$QUAL.noRep.poly.vcf
+# can also be performed with vcftools
+vcftools --gzvcf A_rabiei_2018_2020.bwa.fb.stringent.vcf.gz --stdout --minDP $IND_DP --recode --recode-INFO-all --minQ 20 --max-missing 0.95 --remove duplicated_samples.csv --remove-indels | SnpSift filter "( QUAL>=$QUAL ) & ( DP<$MAX_DP ) & ( DP>$MIN_DP ) & ( countRef()>=1 & countVariant()>=1 )" >  Filtered/A_rabiei_2018_2020.bwa.fb.stringent.Q$QUAL.GT95.noRep.poly.vcf
 
-# collate stats
-head -n1 sample_25-L11.bbsplit.stats | paste <(echo "sample")  - > stats.headers
 
-ls -1 sample*.stats | parallel --rpl "{sample} s:.bbsplit.stats::" 'tail -n +2 {} | paste <(echo -e "{sample}\n{sample}") -' | cat stats.headers - > all_samples.combined.stats
+bcftools filter -i 'F_PASS(DP>7 & GT!="mis") > 0.95 && QUAL>20 && TYPE="snp"' -O v | vcftools --vcf - 
+
+# filter Octopus variants (no SNP tag)
+SnpSift filter "( QUAL>$QUAL ) & ( DP<$MAX_DP ) & ( DP>$MIN_DP ) & ( countRef()>=1 & countVariant()>=1 )" All_Arabiei_WGS_samples.octopus.joint.vcf.gz | SnpSift gtfilter -gv './.' "( DP<$IND_DP )" > All_Arabiei_WGS_samples.octopus.joint.Q$QUAL.noRep.poly.vcf
+
+# filter to keep only SNP loci with a maximum of 10% missing genotype calls
+bcftools filter -e 'F_MISSING>0.1 && TYPE="snp"' All_Arabiei_WGS_samples.octopus.joint.Q20.noRep.poly.vcf > All_Arabiei_WGS_samples.octopus.joint.Q20.GT90.noRep.poly.vcf
+
+# make tfam file
+#SnpSift vcf2tped -onlySnp A_rabiei_2018_isolates.tfam A_rabiei_2018_isolates_haplo.Qual20.U20kDP.poly.snps.vcf A_rabiei_2018_isolates # A_rabiei_on_me14_DP_filtered 
+```
+
+An in-house R script (`estimate_error_rates_vcf_files.R`) was used to estimate the error rates based on the presence of duplicated samples. The variants called with `r fontFmt("Freebayes")` were found to be in an order of magnitude more accurate than the ones produced with `r fontFmt("Octopus")`.  
+
+```{r estimate-error-vcf}
+vcf_error_rates <- read_excel("output/variant_calling_pipeline_comparison.xlsx", 'pipeline_comparison_sum')
+# produce table
+vcf_error_rates %>% select(-`Replicate Num`) %>% 
+  mutate(across(ends_with("Error Rate"), ~round(.x, digits = 4))) %>% 
+  datatable(rownames = FALSE) %>% #, 
+#  formatRound(~coverage+mapping_quality_mean, 1) %>% 
+  formatPercentage(2:3, 2) 
+
+```
 
 
+#### Variant Join
+The variants produced with TECAN were joined with the WGS ones (called with Freebayes) using `r fontFmt("BCFtools")` v1.17 [@danecekTwelveYearsSAMtools2021; @liStatisticalFrameworkSNP2011].
 
+```{bash vcf-join}
+bcftools merge --regions-overlap 2 -O v FB_new-genome_chr_joint-call.bcf.gz A_rabiei_2018_2020.bwa.fb.stringent.vcf.gz | bcftools filter -i 'F_PASS(DP>7 & GT!="mis") > 0.95' -O z > merged_TECAN_FB_WGS_snps.DP7-filtered.vcf.gz
+
+SnpSift gtfilter -gv '.' "( DP<7 )" | bcftools view -O z -e 'F_MISSING>0.05 && QUAL>20' > merged_TECAN_FB_WGS_snps.DP7-filtered.vcf.gz
+
+bcftools merge --regions-overlap 2 -O v FB_new-genome_chr_joint-call.bcf.gz A_rabiei_2018_2020.bwa.fb.stringent.vcf.gz | vcftools --vcf - --out merged_TECAN_FB_WGS_snps.DP7-filtered --minDP 7 --minQ 20 --recode --recode-INFO-all --max-missing 0.95 
+# check how many SNPs remain
+gzip -cd merged_TECAN_FB_WGS_snps.DP7-filtered.vcf.gz | grep -c -v "^#"
 ```
 
 ### Genome-wide Copy Number Variation
@@ -1085,7 +1135,7 @@ CNMOPS_JOB=$( echo "source ~/.bashrc; conda activate $CONDA_NAME; cd $PWD; set -
 
 ```
 
-Alternatively, `r fontFmt("cn.MOPS")` can be run on the HPC by starting R and running the following:
+Alternatively, `r fontFmt("cn.MOPS")` can be run on the HPC by starting launching an interactive job and running the following in `r fontFmt("R")`:
 
 ```{r cn-mops-r}
 library(cn.mops)
@@ -1292,7 +1342,7 @@ Interactive analysis with CNVpytor
 
 The data produced by CNVPytor was then exported to CloudStor (folder [jemma_cnv](https://cloudstor.aarnet.edu.au/plus/f/6815516595)) and visualised using a Jupyter notebook on [CloudStor SWAN](https://support.aarnet.edu.au/hc/en-us/articles/360000575395-CloudStor-SWAN). See explanation of output in [Predicting CNV regions](https://github.com/abyzovlab/CNVpytor/blob/master/GettingStarted.md#predicting-cnv-regions)
 
-As an alternative to SWAN, the data can be analysed interactively bu launching a Jupyter notebook directly from the Gowonda HPC (see documentation [here](https://griffith.atlassian.net/wiki/spaces/GHCD/pages/4030602/Jupyter+Notebook))
+As an alternative to SWAN, the data can be analysed interactively by launching a Jupyter notebook directly from the Gowonda HPC (see documentation [here](https://griffith.atlassian.net/wiki/spaces/GHCD/pages/4030602/Jupyter+Notebook))
 ```{bash cnvpytor-jupyter}
 WORK_DIR=$HOME/aDNA/jemma_cnv
 cd $WORK_DIR
@@ -1412,6 +1462,7 @@ plot_ly(x=NNSW_pca$Axis1, y=NNSW_pca$Axis2, z=NNSW_pca$Axis3, type="scatter3d", 
 
 ```
 
+
 ### Variant Annotation
 
 Variants were then further filtered to keep only polymorphic and bi-allelic SNPs using the `r fontFmt("VariantAnnotation")` v`r packageVersion("VariantAnnotation")` and `r fontFmt("GenomicRanges")` v`r packageVersion("GenomicRanges")` Bioconductor R packages [@obenchain2014; @lawrence2014; @lawrence2013]. The SNPs were annotated and position of each variant relative to gene locations was determined (coding/intron/promotor/intergenic), based on the reference genome and gene models of *A. rabiei* strain *Me14* (where the contig names were shortened to remove the `Arab_Me14` prefix).
@@ -1459,6 +1510,7 @@ nextflow run -profile gowonda -c $HOME/.nextflow/GU.config -with-conda $CONDA_PA
 
 Look for particular effector genes and genes associated with plant-pathogen interactions and pathogenicity genes. Look in the literature and create a list of target genes.
 
+
 ### Visualisation
 
 The variants were summarised and visualised across the genome scaffolds and visualised using `r fontFmt("circlize")` v`r packageVersion("circlize")` R package [@gu2014].
@@ -1471,6 +1523,25 @@ Association between variants and pathogenicity levels was identified with `r fon
 
 -   A population genomic characterization of copy number variation in the opportunistic fungal pathogen *Aspergillus fumigatus* [@zhao2018]
 -   Whole-Genome Comparison of *Aspergillus fumigatus* Strains Serially Isolated from Patients with Aspergillosis [@hagiwara2014]
+
+## Dual RNA-Seq Read Alignment
+```{bash dualrnaseq-bbsplit}
+# bbsplit (for RNA-Seq)
+# create index
+bbsplit.sh build=1 ref_chickpea=$HOME/data/reference_genomes/Cicer_arietinum/Car.genome.fa.gz ref_rabiei=$HOME/data/reference_genomes/Ascochyta_reference_genomes/ArME14_v2_NCBI/ArME14_v2_NCBI.fa threads=\$[NCPUS - 2]
+
+ls -1 ~/aDNA/Mumu_RNA-seq/AGRF_CAGRF220911960_H5L5CDSX7_genozip/downsampled_files/*_R1.fastq.gz | parallel -k --dry-run --rpl "{infile} s:_R1:_R#:; uq()" --rpl "{sample} s:.+/(.+?)_H5L5CDSX7_[ACGT\-]+_L004_.+:\1:"  "bbsplit.sh build=1 threads=\$[NCPUS - 2] in={infile} basename={sample}_%_R#.fastq.gz refstats={sample}.bbsplit.stats maxindel=100k ambiguous2=split qtrim=lr" > bbsplit.cmds
+
+BBSPLIT=$(qsub -J1-$(cat bbsplit.cmds | wc -l) -l select=1:ncpus=10:mem=16GB,walltime=2:00:00 -N bbsplit_RNA-Seq -q workq -v"CMDS_FILE=bbsplit.cmds","WORKDIR=$PWD" array.pbspro | egrep -o "^[0-9]+")
+
+# collate stats
+head -n1 sample_25-L11.bbsplit.stats | paste <(echo "sample")  - > stats.headers
+
+ls -1 sample*.stats | parallel --rpl "{sample} s:.bbsplit.stats::" 'tail -n +2 {} | paste <(echo -e "{sample}\n{sample}") -' | cat stats.headers - > all_samples.combined.stats
+
+
+
+```
 
 ## General information
 
